@@ -30,6 +30,7 @@ SkillGraph helps you **see through** these risks with graph-based analysis.
 - 💻 **CLI Tool** - Command-line interface for quick scanning
 - 🌐 **Web UI** - Streamlit-based visualization app
 - 📁 **Folder Upload** - Upload complete skill folders (ZIP)
+- ✅ **ZIP Regression Tests** - Automated tests for valid/bad/multi-extension ZIP uploads
 
 ## Quick Start
 
@@ -78,6 +79,14 @@ streamlit run src/skillgraph/viz/app.py
 ```
 
 Open http://localhost:8501 in your browser.
+
+If you access from another host/IP and upload returns `AxiosError 403`, add these in `.streamlit/config.toml` and restart:
+
+```toml
+[server]
+enableCORS = false
+enableXsrfProtection = false
+```
 
 ## Input Methods
 
@@ -135,6 +144,7 @@ skillgraph/
 - [x] MVP: Parser + Rules + CLI
 - [x] Streamlit Visualization (Pyvis)
 - [x] Folder Upload Support (ZIP)
+- [x] ZIP upload regression tests
 - [ ] GraphRAG Integration
 - [ ] GNN Risk Model
 - [ ] FastAPI Service

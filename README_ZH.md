@@ -30,6 +30,7 @@ SkillGraph 通过图谱分析帮你**看穿**这些风险。
 - 💻 **CLI Tool** - 命令行快速扫描工具
 - 🌐 **Web UI** - Streamlit 可视化应用
 - 📁 **Folder Upload** - 上传完整 skill 文件夹 (ZIP)
+- ✅ **ZIP 回归测试** - 覆盖正常/坏包/多后缀 ZIP 上传场景
 
 ## 快速开始
 
@@ -78,6 +79,14 @@ streamlit run src/skillgraph/viz/app.py
 ```
 
 在浏览器中打开 http://localhost:8501
+
+如果通过局域网 IP 访问时上传出现 `AxiosError 403`，请在 `.streamlit/config.toml` 增加以下配置并重启服务：
+
+```toml
+[server]
+enableCORS = false
+enableXsrfProtection = false
+```
 
 ## 输入方式
 
@@ -135,6 +144,7 @@ skillgraph/
 - [x] MVP: Parser + Rules + CLI
 - [x] Streamlit 可视化 (Pyvis)
 - [x] 文件夹上传支持 (ZIP)
+- [x] ZIP 上传回归测试
 - [ ] GraphRAG 集成
 - [ ] GNN 风险模型
 - [ ] FastAPI 服务
