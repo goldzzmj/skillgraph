@@ -11,6 +11,7 @@ import json
 import tempfile
 import zipfile
 import os
+import io
 from typing import List, Dict, Optional
 from collections import defaultdict
 
@@ -314,8 +315,10 @@ def create_app():
                     net.add_edge(source, target, title=data.get('type', ''))
 
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as f:
-                    net.save_graph(f.name)
-                    html_content = f.read().decode('utf-8')
+                    temp_html_path = Path(f.name)
+
+                net.save_graph(str(temp_html_path))
+                html_content = temp_html_path.read_text(encoding='utf-8', errors='replace')
 
                 st.components.v1.html(html_content, height=520, scrolling=True)
 
@@ -383,19 +386,31 @@ def process_zip_upload(uploaded_zip, parser: SkillParser, detector: RiskDetector
     with tempfile.TemporaryDirectory() as temp_dir:
         # Save and extract ZIP
         zip_path = Path(temp_dir) / "upload.zip"
-        zip_path.write_bytes(uploaded_zip.read())
+        zip_bytes = uploaded_zip.getvalue() if hasattr(uploaded_zip, "getvalue") else uploaded_zip.read()
+        zip_path.write_bytes(zip_bytes)
 
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(temp_dir)
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+        except zipfile.BadZipFile:
+            st.error("Uploaded file is not a valid ZIP archive.")
+            return []
 
         # Find all markdown files
-        for md_file in Path(temp_dir).rglob("*.md"):
+        markdown_suffixes = {".md", ".markdown", ".mdown", ".mkd", ".txt"}
+        for md_file in Path(temp_dir).rglob("*"):
+            if not md_file.is_file() or md_file.suffix.lower() not in markdown_suffixes:
+                continue
             try:
                 content = md_file.read_text(encoding='utf-8')
+            except UnicodeDecodeError:
+                content = md_file.read_text(encoding='utf-8', errors='replace')
+            try:
                 # Skip empty or very small files
                 if len(content.strip()) > 50:
                     parsed, findings = analyze_skill(content, parser, detector)
-                    skills_data.append((md_file.name, content, parsed, findings))
+                    relative_name = md_file.relative_to(Path(temp_dir)).as_posix()
+                    skills_data.append((relative_name, content, parsed, findings))
             except Exception as e:
                 st.warning(f"Could not parse {md_file.name}: {e}")
 
