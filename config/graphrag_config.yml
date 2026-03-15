@@ -1,0 +1,131 @@
+# GraphRAG Configuration for SkillGraph
+# This file configures the GraphRAG integration for AI Agent Skills security scanning
+
+# Model Configuration
+model:
+  provider: "openai"  # Options: openai, anthropic, azure
+  model_name: "gpt-4-turbo-preview"
+  embedding_model: "text-embedding-3-small"
+  api_key: "${OPENAI_API_KEY}"  # Set environment variable or replace with actual key
+  api_base: ""  # Optional: Custom API base URL
+  temperature: 0.0  # For deterministic extraction
+  max_tokens: 2000
+
+# Alternative Model Configuration (commented out)
+# model:
+#   provider: "anthropic"
+#   model_name: "claude-3-opus-20240229"
+#   embedding_model: "claude-3-sonnet-20240229"
+#   api_key: "${ANTHROPIC_API_KEY}"
+#   temperature: 0.0
+#   max_tokens: 2000
+
+# Entity Extraction Configuration
+entity_extraction:
+  enabled: true
+  max_gleanings: 3              # Number of extraction passes
+  chunk_size: 2000             # Characters per chunk for extraction
+  chunk_overlap: 200           # Overlap between chunks
+  min_confidence: 0.5          # Minimum confidence for extracted entities
+  entity_types:
+    - tool
+    - api
+    - file
+    - variable
+    - config
+    - permission
+    - network
+    - code
+    - instruction
+
+# Relationship Extraction Configuration
+relationship_extraction:
+  enabled: true
+  max_gleanings: 2              # Number of extraction passes
+  min_confidence: 0.5          # Minimum confidence for relationships
+  relationship_types:
+    - calls
+    - depends_on
+    - accesses
+    - modifies
+    - contains
+    - requires
+    - validates
+    - transforms
+    - authenticates
+
+# Community Detection Configuration
+community_detection:
+  enabled: true
+  algorithm: "leiden"          # Options: leiden, louvain, spectral
+  resolution: 1.0              # Resolution parameter (higher = fewer, larger communities)
+  max_level: 5                 # Maximum hierarchy depth
+  min_community_size: 2         # Minimum entities per community
+
+# Embedding Configuration
+embeddings:
+  enabled: true
+  batch_size: 100              # Entities per batch for embedding
+  dimension: 1536              # Embedding dimension (depends on model)
+  cache_embeddings: true        # Cache embeddings to disk
+  cache_dir: ".cache/embeddings"
+
+# Retrieval Configuration
+retrieval:
+  strategy: "hybrid"            # Options: entity, community, hybrid, risk
+  top_k_entities: 10            # Number of entities to retrieve
+  top_k_communities: 5         # Number of communities to retrieve
+  similarity_threshold: 0.7      # Minimum similarity for retrieval
+  entity_weight: 0.6            # Weight for entity retrieval (in hybrid mode)
+  community_weight: 0.4         # Weight for community retrieval (in hybrid mode)
+  risk_boost: 1.5              # Boost factor for high-risk entities
+
+# Risk Assessment Configuration
+risk_assessment:
+  enabled: true
+  risk_patterns_file: "config/risk_patterns.yml"  # Custom risk patterns
+  entity_risk_weights:
+    tool: 0.4
+    api: 0.3
+    file: 0.5
+    variable: 0.2
+    config: 0.3
+    permission: 0.6
+    network: 0.7
+    code: 0.4
+    instruction: 0.2
+  relationship_risk_weights:
+    calls: 0.3
+    depends_on: 0.2
+    accesses: 0.5
+    modifies: 0.6
+    contains: 0.2
+    requires: 0.2
+    validates: 0.1
+    transforms: 0.4
+    authenticates: 0.7
+
+# Graph Export Configuration
+graph_export:
+  format: "networkx"           # Options: networkx, gexf, graphml, json
+  include_embeddings: false    # Include embeddings in export (large files)
+  output_dir: "output/graphs"
+
+# Caching Configuration
+cache:
+  enabled: true
+  cache_dir: ".cache/graphrag"
+  ttl: 86400                  # Cache time-to-live in seconds (24 hours)
+
+# Logging Configuration
+logging:
+  level: "INFO"                # Options: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/graphrag.log"
+
+# Performance Configuration
+performance:
+  parallel_embeddings: true     # Generate embeddings in parallel
+  parallel_extraction: false   # Extract entities in parallel (experimental)
+  max_workers: 4               # Maximum parallel workers
+  batch_delay_ms: 100         # Delay between API calls (rate limiting)
