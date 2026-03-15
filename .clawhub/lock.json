@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "find-skills": {
+      "version": "0.1.0",
+      "installedAt": 1770740798216
+    },
+    "tavily-search": {
+      "version": "1.0.0",
+      "installedAt": 1770740809864
+    },
+    "proactive-agent-1-2-4": {
+      "version": "1.0.0",
+      "installedAt": 1770740817123
+    },
+    "agent-browser": {
+      "version": "0.2.0",
+      "installedAt": 1770742054303
+    },
+    "xiaohongshu-mcp": {
+      "version": "1.0.0",
+      "installedAt": 1770768024537
+    }
+  }
+}
