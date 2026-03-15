@@ -1,17 +1,51 @@
-import os
-import shutil
-import glob
+"""
+Disk Cleaner - Safe directory cleaning with error handling
 
-def clean_dir(path, name):
-    """清理指定目录"""
+Cleans temporary files and caches from various locations.
+All operations are non-destructive and skip files that cannot be accessed.
+"""
+import os
+import logging
+from typing import Tuple
+from datetime import datetime
+
+
+def setup_logging() -> None:
+    """Configure logging for the cleaner."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('cleanup.log', encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+
+
+def clean_dir(path: str, name: str) -> Tuple[int, int]:
+    """
+    Safely clean a directory by removing all files and empty directories.
+
+    Args:
+        path: Directory path to clean
+        name: Human-readable name for logging
+
+    Returns:
+        Tuple of (total_freed_bytes, files_deleted_count)
+    """
     if not os.path.exists(path):
-        print(f"[ERROR] {name}: Directory not found - {path}")
-        return 0
+        logging.warning(f"[SKIP] {name}: Directory not found - {path}")
+        return 0, 0
+
+    if not os.path.isdir(path):
+        logging.error(f"[ERROR] {name}: Path is not a directory - {path}")
+        return 0, 0
 
     total_size = 0
     file_count = 0
 
     try:
+        # Remove files
         for root, dirs, files in os.walk(path):
             for file in files:
                 file_path = os.path.join(root, file)
@@ -21,50 +55,87 @@ def clean_dir(path, name):
                     file_count += 1
                     os.remove(file_path)
                 except (PermissionError, OSError) as e:
-                    pass  # Skip files we can't access
+                    logging.debug(f"[SKIP] Cannot remove {file_path}: {e}")
 
-        # Try to remove empty directories
+        # Remove empty directories
         for root, dirs, files in os.walk(path, topdown=False):
-            for dir in dirs:
+            for dir_name in dirs:
+                dir_path = os.path.join(root, dir_name)
                 try:
-                    os.rmdir(os.path.join(root, dir))
+                    os.rmdir(dir_path)
                 except OSError:
-                    pass  # Skip directories we can't remove
+                    # Directory not empty or cannot be removed
+                    pass
 
         size_mb = total_size / (1024 * 1024)
-        print(f"[OK] {name}: Cleaned {file_count} files, freed {size_mb:.2f} MB")
+        logging.info(f"[OK] {name}: Cleaned {file_count} files, freed {size_mb:.2f} MB")
 
     except Exception as e:
-        print(f"[ERROR] {name}: Clean failed - {e}")
+        logging.error(f"[ERROR] {name}: Clean failed - {e}")
 
-    return total_size
+    return total_size, file_count
 
-def main():
-    print("开始清理...")
-    print("=" * 60)
+
+def format_size(bytes_size: int) -> str:
+    """
+    Format bytes into human-readable size.
+
+    Args:
+        bytes_size: Size in bytes
+
+    Returns:
+        Formatted size string (e.g., "123.45 MB")
+    """
+    mb = bytes_size / (1024 * 1024)
+    gb = mb / 1024
+
+    if gb >= 1:
+        return f"{gb:.2f} GB"
+    else:
+        return f"{mb:.2f} MB"
+
+
+def main() -> int:
+    """
+    Main function - runs the disk cleaning process.
+
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    setup_logging()
+
+    logging.info("=" * 60)
+    logging.info("Disk Cleaner Started")
+    logging.info(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logging.info("=" * 60)
+
+    # Define cleanup paths
+    cleanup_paths = [
+        (r"C:\Users\GX\AppData\Local\Temp", "临时文件"),
+        (r"C:\Users\GX\AppData\Local\Google\Chrome\User Data\Default\Cache", "Chrome缓存"),
+        (r"C:\Users\GX\AppData\Local\Microsoft\Edge\User Data\Default\Cache", "Edge缓存"),
+        (r"C:\Windows\Temp", "Windows临时文件"),
+        (r"C:\Windows\Prefetch", "Prefetch缓存"),
+    ]
 
     total_freed = 0
+    total_files = 0
 
-    # 清理临时文件
-    total_freed += clean_dir(r"C:\Users\GX\AppData\Local\Temp", "临时文件")
+    # Clean each directory
+    for path, name in cleanup_paths:
+        freed, files = clean_dir(path, name)
+        total_freed += freed
+        total_files += files
 
-    # 清理Chrome缓存
-    chrome_cache = r"C:\Users\GX\AppData\Local\Google\Chrome\User Data\Default\Cache"
-    total_freed += clean_dir(chrome_cache, "Chrome缓存")
+    # Print summary
+    logging.info("=" * 60)
+    logging.info(f"Total: Cleaned {total_files} files")
+    logging.info(f"Total Freed: {format_size(total_freed)}")
+    logging.info("=" * 60)
 
-    # 清理Edge缓存
-    edge_cache = r"C:\Users\GX\AppData\Local\Microsoft\Edge\User Data\Default\Cache"
-    total_freed += clean_dir(edge_cache, "Edge缓存")
+    return 0
 
-    # 清理Windows临时文件
-    total_freed += clean_dir(r"C:\Windows\Temp", "Windows临时文件")
-
-    # 清理Prefetch
-    total_freed += clean_dir(r"C:\Windows\Prefetch", "Prefetch缓存")
-
-    print("=" * 60)
-    total_mb = total_freed / (1024 * 1024)
-    print(f"总计释放: {total_mb:.2f} MB ({total_mb/1024:.2f} GB)")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
