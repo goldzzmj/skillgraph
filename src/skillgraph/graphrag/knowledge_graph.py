@@ -1,7 +1,7 @@
 """
 Knowledge Graph Module
 
-Build and manage the knowledge graph for GraphRAG analysis.
+Build and manage knowledge graph for GraphRAG analysis.
 """
 
 import networkx as nx
@@ -64,41 +64,33 @@ class KnowledgeGraph:
         Returns:
             Complete GraphRAGAnalysis object
         """
-        # Extract entities
+        # Step 1: Extract entities
         self.entities = self.entity_extractor.extract(
             parsed_skill.content if hasattr(parsed_skill, 'content') else '',
             parsed_skill.sections if hasattr(parsed_skill, 'sections') else [],
             parsed_skill.code_blocks if hasattr(parsed_skill, 'code_blocks') else []
         )
 
-        # Extract relationships
+        # Step 2: Extract relationships
         self.relationships = self._extract_relationships()
 
-        # Assign risk scores
-        if risk_findings:
-            self._assign_risk_scores(risk_findings)
-
-        # Detect communities
+        # Step 3: Detect communities
         self.communities = self.community_detector.detect(
             self.entities,
             self.relationships
         )
 
-        # Generate embeddings
-        self.entities = self.embedding_generator.generate_entity_embeddings(
-            self.entities
-        )
-        self.relationships = self.embedding_generator.generate_relationship_embeddings(
-            self.relationships
-        )
-        self.communities = self.embedding_generator.generate_community_embeddings(
-            self.communities
-        )
+        # Step 4: Assign risk scores
+        if risk_findings:
+            self._assign_risk_scores(risk_findings)
 
-        # Build NetworkX graph
+        # Step 5: Generate embeddings (with consistent TF-IDF fitting)
+        self._generate_all_embeddings()
+
+        # Step 6: Build NetworkX graph
         self.nx_graph = self._build_nx_graph()
 
-        # Generate analysis summary
+        # Step 7: Generate analysis summary
         summary = self._generate_summary()
 
         # Create analysis object
@@ -208,6 +200,42 @@ class KnowledgeGraph:
             # Cap risk at 1.0
             entity.risk_score = min(1.0, base_risk)
 
+    def _generate_all_embeddings(self):
+        """
+        Generate embeddings for entities, relationships, and communities
+        with consistent TF-IDF fitting.
+        """
+        # Collect all texts that need embedding
+        entity_texts = [
+            f"{entity.name}. {entity.description}"
+            for entity in self.entities
+        ]
+
+        relationship_texts = [
+            f"{rel.type.value}. {rel.description}"
+            for rel in self.relationships
+        ]
+
+        community_texts = [
+            community.description
+            for community in self.communities
+        ]
+
+        # Fit TF-IDF vectorizer on ALL texts together (for consistent dimensions)
+        all_texts = entity_texts + relationship_texts + community_texts
+        self.embedding_generator._fit_tfidf(all_texts)
+
+        # Now generate embeddings for each type
+        self.entities = self.embedding_generator.generate_entity_embeddings(
+            self.entities
+        )
+        self.relationships = self.embedding_generator.generate_relationship_embeddings(
+            self.relationships
+        )
+        self.communities = self.embedding_generator.generate_community_embeddings(
+            self.communities
+        )
+
     def _build_nx_graph(self) -> nx.DiGraph:
         """
         Build NetworkX directed graph.
@@ -254,7 +282,7 @@ class KnowledgeGraph:
         for entity in self.entities:
             entity_types[entity.type.value] = entity_types.get(entity.type.value, 0) + 1
 
-        parts.append(f"Knowledge Graph Summary:")
+        parts.append("Knowledge Graph Summary:")
         parts.append(f"  - Total entities: {len(self.entities)}")
         parts.append(f"  - Total relationships: {len(self.relationships)}")
         parts.append(f"  - Total communities: {len(self.communities)}")
@@ -304,7 +332,7 @@ class KnowledgeGraph:
         query: str
     ) -> GraphRAGAnalysis:
         """
-        Query the knowledge graph.
+        Query knowledge graph.
 
         Args:
             query: Query string
@@ -401,7 +429,7 @@ class KnowledgeGraph:
         Get all entities of a specific type.
 
         Args:
-            entity_type: Entity type
+            entity_type: Entity type to filter by
 
         Returns:
             List of entities

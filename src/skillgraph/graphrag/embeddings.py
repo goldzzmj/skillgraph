@@ -43,6 +43,9 @@ class EmbeddingGenerator:
         # Determine embedding method
         self.embedding_method = self._determine_method()
 
+        # Initialize TF-IDF vectorizer (for consistent embeddings)
+        self._tfidf_vectorizer = None
+
     def _determine_method(self) -> str:
         """
         Determine which embedding method to use.
@@ -68,6 +71,25 @@ class EmbeddingGenerator:
 
         # Fallback to hash-based embeddings
         return 'hash'
+
+    def _fit_tfidf(self, texts: List[str]):
+        """
+        Fit TF-IDF vectorizer on all texts (for consistent dimensions).
+
+        Args:
+            texts: All texts to fit on
+        """
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
+        self._tfidf_vectorizer = TfidfVectorizer(
+            max_features=self.dimension,
+            stop_words='english'
+        )
+
+        # Fit on all texts
+        self._tfidf_vectorizer.fit(texts)
+
+        print(f"[INFO] TF-IDF vectorizer fitted on {len(texts)} texts, vocabulary size: {len(self._tfidf_vectorizer.vocabulary_)}")
 
     def generate_entity_embeddings(
         self,
@@ -268,33 +290,48 @@ class EmbeddingGenerator:
 
     def _generate_tfidf_embeddings(
         self,
-        texts: List[str]
+        texts: List[str],
+        fit: bool = True
     ) -> List[np.ndarray]:
         """
         Generate TF-IDF embeddings (fallback method).
 
         Args:
             texts: List of text strings
+            fit: Whether to fit the vectorizer (only first time)
 
         Returns:
             List of embedding vectors
         """
         from sklearn.feature_extraction.text import TfidfVectorizer
 
-        # Create TF-IDF vectorizer
-        vectorizer = TfidfVectorizer(
-            max_features=self.dimension,
-            stop_words='english'
-        )
+        # Create or use existing vectorizer
+        if self._tfidf_vectorizer is None or fit:
+            self._tfidf_vectorizer = TfidfVectorizer(
+                max_features=self.dimension,
+                stop_words='english'
+            )
+            # Fit on all texts
+            self._tfidf_vectorizer.fit(texts)
 
-        # Fit and transform
-        tfidf_matrix = vectorizer.fit_transform(texts)
+        # Transform to TF-IDF vectors
+        tfidf_matrix = self._tfidf_vectorizer.transform(texts)
 
-        # Convert to dense arrays
-        embeddings = [
-            tfidf_matrix[i].toarray().flatten()
-            for i in range(len(texts))
-        ]
+        # Convert to dense arrays and pad/truncate to consistent dimension
+        embeddings = []
+        for i in range(len(texts)):
+            # Get dense vector
+            vector = tfidf_matrix[i].toarray().flatten()
+
+            # Ensure consistent dimension
+            if len(vector) < self.dimension:
+                # Pad with zeros
+                vector = np.pad(vector, (0, self.dimension - len(vector)))
+            elif len(vector) > self.dimension:
+                # Truncate
+                vector = vector[:self.dimension]
+
+            embeddings.append(vector)
 
         return embeddings
 
