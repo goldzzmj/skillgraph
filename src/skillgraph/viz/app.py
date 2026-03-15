@@ -1,12 +1,18 @@
 """
 Streamlit Visualization App
 
-Interactive visualization of skill security analysis.
+Interactive visualization of skill security analysis with GraphRAG integration.
+Supports folder uploads for complete skill analysis.
 """
 
 import streamlit as st
 from pathlib import Path
 import json
+import tempfile
+import zipfile
+import os
+from typing import List, Dict, Optional
+from collections import defaultdict
 
 from skillgraph.parser import SkillParser
 from skillgraph.rules import RiskDetector, RiskLevel
@@ -32,6 +38,10 @@ def create_app():
     .risk-high { background-color: #fff7ed; border-left: 4px solid #ea580c; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
     .risk-medium { background-color: #fefce8; border-left: 4px solid #ca8a04; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
     .risk-low { background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
+    .file-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin: 0.5rem 0; }
+    .metric-safe { color: #16a34a; }
+    .metric-warning { color: #ca8a04; }
+    .metric-danger { color: #dc2626; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -48,45 +58,81 @@ def create_app():
     with st.sidebar:
         st.header("📁 Input")
 
-        input_method = st.radio("Choose input method:", ["Upload File", "Paste Content", "Example Skills"])
+        input_method = st.radio(
+            "Choose input method:",
+            ["Upload Folder (ZIP)", "Upload Files", "Paste Content", "Example Skills"]
+        )
 
-        skill_content = None
-        skill_name = "Uploaded Skill"
+        skills_data = []  # List of (filename, content, parsed, findings)
 
-        if input_method == "Upload File":
-            uploaded_file = st.file_uploader("Upload a skill file", type=['md', 'markdown', 'txt'])
-            if uploaded_file:
-                skill_content = uploaded_file.read().decode('utf-8')
-                skill_name = uploaded_file.name
+        if input_method == "Upload Folder (ZIP)":
+            uploaded_zip = st.file_uploader(
+                "Upload a skill folder (ZIP)",
+                type=['zip'],
+                help="Upload a ZIP file containing a skill folder with multiple markdown files"
+            )
+
+            if uploaded_zip:
+                skills_data = process_zip_upload(uploaded_zip, parser, detector)
+                st.success(f"✅ Loaded {len(skills_data)} files from ZIP")
+
+        elif input_method == "Upload Files":
+            uploaded_files = st.file_uploader(
+                "Upload skill files",
+                type=['md', 'markdown', 'txt'],
+                accept_multiple_files=True,
+                help="Upload one or more skill markdown files"
+            )
+
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    content = uploaded_file.read().decode('utf-8')
+                    parsed, findings = analyze_skill(content, parser, detector)
+                    skills_data.append((uploaded_file.name, content, parsed, findings))
+                st.success(f"✅ Loaded {len(skills_data)} files")
 
         elif input_method == "Paste Content":
-            skill_content = st.text_area("Paste skill content:", height=300, placeholder="Paste your skill Markdown content here...")
+            skill_content = st.text_area(
+                "Paste skill content:",
+                height=300,
+                placeholder="Paste your skill Markdown content here..."
+            )
             if skill_content:
-                skill_name = "Pasted Skill"
+                parsed, findings = analyze_skill(skill_content, parser, detector)
+                skills_data.append(("Pasted Skill", skill_content, parsed, findings))
 
-        else:
+        else:  # Example Skills
             example = st.selectbox("Choose an example:", [
                 "normal_skill",
                 "malicious_skill",
                 "suspicious_skill",
                 "real: daily-coding",
-                "real: git-workflow"
-                "real: malicious",
+                "real: git-workflow",
+                "real: code-review",
+                "real: research-ideation",
+                "real: skill-development",
             ])
             skill_content = get_example_skill(example)
-            skill_name = f"Example: {example}"
+            parsed, findings = analyze_skill(skill_content, parser, detector)
+            skills_data.append((f"Example: {example}", skill_content, parsed, findings))
 
         st.divider()
         st.header("⚙️ Options")
         show_code = st.checkbox("Show Code Blocks", value=True)
+        show_graph = st.checkbox("Show Knowledge Graph", value=True)
 
     # Main content
-    if not skill_content:
-        st.info("👈 Please upload a skill file, paste content, or select an example to begin analysis.")
+    if not skills_data:
+        st.info("👈 Please upload a skill folder (ZIP), files, paste content, or select an example to begin analysis.")
         st.markdown("""
         ### Getting Started
 
         SkillGraph helps you identify security risks in AI Agent Skills before using them.
+
+        **Supported Input:**
+        - 📁 **ZIP Folder** - Upload a complete skill folder
+        - 📄 **Multiple Files** - Upload multiple markdown files
+        - 📋 **Paste Content** - Paste skill content directly
 
         **What it detects:**
         - 🔴 Data exfiltration attempts
@@ -95,25 +141,31 @@ def create_app():
         - 🟠 Security bypass instructions
         - 🟡 Sensitive file access
         - 🟡 Suspicious network requests
-
-        Upload a `.md` skill file to get started!
         """)
         st.stop()
 
-    # Parse and analyze
-    with st.spinner("Analyzing skill..."):
-        try:
-            parsed = parser.parse(skill_content)
-            findings = detector.detect(parsed)
-            overall_risk = detector.get_overall_risk(findings)
-            risk_score = detector.calculate_risk_score(findings)
-        except Exception as e:
-            st.error(f"Error parsing skill: {e}")
-            st.stop()
+    # Calculate overall statistics
+    total_findings = sum(len(s[3]) for s in skills_data)
+    critical_count = sum(sum(1 for f in s[3] if f.level == RiskLevel.CRITICAL) for s in skills_data)
+    high_count = sum(sum(1 for f in s[3] if f.level == RiskLevel.HIGH) for s in skills_data)
+    medium_count = sum(sum(1 for f in s[3] if f.level == RiskLevel.MEDIUM) for s in skills_data)
+    low_count = sum(sum(1 for f in s[3] if f.level == RiskLevel.LOW) for s in skills_data)
+
+    # Determine overall risk
+    if critical_count > 0:
+        overall_risk = RiskLevel.CRITICAL
+    elif high_count > 0:
+        overall_risk = RiskLevel.HIGH
+    elif medium_count > 0:
+        overall_risk = RiskLevel.MEDIUM
+    elif low_count > 0:
+        overall_risk = RiskLevel.LOW
+    else:
+        overall_risk = RiskLevel.SAFE
 
     # Metrics row
     st.divider()
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     risk_emoji = {
         RiskLevel.CRITICAL: "🔴",
@@ -126,165 +178,240 @@ def create_app():
     with col1:
         st.metric("Overall Risk", f"{risk_emoji[overall_risk]} {overall_risk.value.upper()}")
     with col2:
-        st.metric("Risk Score", f"{risk_score:.2f}")
+        st.metric("Files Analyzed", len(skills_data))
     with col3:
-        st.metric("Findings", len(findings))
+        st.metric("Total Findings", total_findings)
     with col4:
-        st.metric("Sections", len(parsed.sections))
+        st.metric("Critical/High", f"🔴 {critical_count} / 🟠 {high_count}")
+    with col5:
+        st.metric("Medium/Low", f"🟡 {medium_count} / 🟢 {low_count}")
 
     # Tabs
-    tab1, tab2, tab3 = st.tabs(["📋 Findings", "📊 Graph", "📄 Parsed Data"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📁 File Analysis", "📋 All Findings", "📊 Graph", "📈 Statistics"])
 
     with tab1:
-        st.subheader("Risk Findings")
+        st.subheader("File-by-File Analysis")
 
-        if not findings:
-            st.success("✅ No security risks detected!")
-        else:
-            # Group findings by level
-            critical = [f for f in findings if f.level == RiskLevel.CRITICAL]
-            high = [f for f in findings if f.level == RiskLevel.HIGH]
-            medium = [f for f in findings if f.level == RiskLevel.MEDIUM]
-            low = [f for f in findings if f.level == RiskLevel.LOW]
+        for filename, content, parsed, findings in skills_data:
+            with st.expander(f"📄 {filename} - {risk_emoji[detector.get_overall_risk(findings)]} {detector.get_overall_risk(findings).value.upper()} ({len(findings)} findings)", expanded=False):
+                col_a, col_b = st.columns([2, 1])
 
-            if critical:
-                st.markdown(f"### 🔴 Critical ({len(critical)})")
-                for f in critical:
-                    st.markdown(f"""
-                    <div class="risk-critical">
-                        <strong>{f.category}</strong><br>
-                        <code>{f.content_snippet[:80]}...</code><br>
-                        <em>💡 {f.suggestion}</em>
-                    </div>
-                    """, unsafe_allow_html=True)
+                with col_a:
+                    st.markdown(f"**Name:** {parsed.name}")
+                    st.markdown(f"**Description:** {parsed.description[:100]}..." if len(parsed.description) > 100 else f"**Description:** {parsed.description}")
 
-            if high:
-                st.markdown(f"### 🟠 High ({len(high)})")
-                for f in high:
-                    st.markdown(f"""
-                    <div class="risk-high">
-                        <strong>{f.category}</strong><br>
-                        <code>{f.content_snippet[:80]}...</code><br>
-                        <em>💡 {f.suggestion}</em>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    if findings:
+                        st.markdown("**Risks Found:**")
+                        for f in findings[:5]:  # Show top 5
+                            st.markdown(f"- {risk_emoji[f.level]} **{f.category}**: {f.content_snippet[:50]}...")
+                        if len(findings) > 5:
+                            st.markdown(f"*... and {len(findings) - 5} more*")
+                    else:
+                        st.success("✅ No risks detected")
 
-            if medium:
-                st.markdown(f"### 🟡 Medium ({len(medium)})")
-                for f in medium:
-                    st.markdown(f"""
-                    <div class="risk-medium">
-                        <strong>{f.category}</strong><br>
-                        <code>{f.content_snippet[:80]}...</code><br>
-                        <em>💡 {f.suggestion}</em>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            if low:
-                st.markdown(f"### 🟢 Low ({len(low)})")
-                for f in low:
-                    st.markdown(f"""
-                    <div class="risk-low">
-                        <strong>{f.category}</strong><br>
-                        <code>{f.content_snippet[:80]}...</code>
-                    </div>
-                    """, unsafe_allow_html=True)
+                with col_b:
+                    st.metric("Sections", len(parsed.sections))
+                    st.metric("Code Blocks", len(parsed.code_blocks))
+                    st.metric("URLs", len(parsed.urls))
 
     with tab2:
-        st.subheader("Skill Knowledge Graph")
+        st.subheader("All Risk Findings")
 
-        # Use Pyvis for visualization
-        try:
-            import pyvis.network
-            from pyvis.network import Network
-            import tempfile
-            import os
+        if total_findings == 0:
+            st.success("✅ No security risks detected in any files!")
+        else:
+            # Group all findings by level
+            all_findings = []
+            for filename, content, parsed, findings in skills_data:
+                for f in findings:
+                    all_findings.append((filename, f))
 
-            # Create graph
-            G = builder.build(parsed, findings)
+            # Sort by severity
+            severity_order = [RiskLevel.CRITICAL, RiskLevel.HIGH, RiskLevel.MEDIUM, RiskLevel.LOW]
+            all_findings.sort(key=lambda x: severity_order.index(x[1].level))
 
-            # Create pyvis network
-            net = Network(height="500px", width="100%", directed=True)
+            if critical_count > 0:
+                st.markdown(f"### 🔴 Critical ({critical_count})")
+                for filename, f in all_findings:
+                    if f.level == RiskLevel.CRITICAL:
+                        st.markdown(f"""
+                        <div class="risk-critical">
+                            <strong>[{filename}]</strong> {f.category}<br>
+                            <code>{f.content_snippet[:80]}...</code><br>
+                            <em>💡 {f.suggestion}</em>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-            # Add nodes
-            for node_id, data in G.nodes(data=True):
-                color = builder._get_node_color(data)
-                size = builder._get_node_size(data)
-                label = data.get('label', node_id)
+            if high_count > 0:
+                st.markdown(f"### 🟠 High ({high_count})")
+                for filename, f in all_findings:
+                    if f.level == RiskLevel.HIGH:
+                        st.markdown(f"""
+                        <div class="risk-high">
+                            <strong>[{filename}]</strong> {f.category}<br>
+                            <code>{f.content_snippet[:80]}...</code><br>
+                            <em>💡 {f.suggestion}</em>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-                net.add_node(node_id, label=label, color=color, size=size,
-                           title=data.get('content', '')[:100])
+            if medium_count > 0:
+                st.markdown(f"### 🟡 Medium ({medium_count})")
+                for filename, f in all_findings:
+                    if f.level == RiskLevel.MEDIUM:
+                        st.markdown(f"""
+                        <div class="risk-medium">
+                            <strong>[{filename}]</strong> {f.category}<br>
+                            <code>{f.content_snippet[:80]}...</code>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-            # Add edges
-            for source, target, data in G.edges(data=True):
-                net.add_edge(source, target, title=data.get('type', ''))
-
-            # Save to temp file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as f:
-                net.save_graph(f.name)
-                html_content = f.read().decode('utf-8')
-
-            st.components.v1.html(html_content, height=520, scrolling=True)
-
-        except ImportError:
-            st.warning("Pyvis not installed. Showing text-based graph structure.")
-            st.code(f"""
-Nodes: {G.number_of_nodes()}
-Edges: {G.number_of_edges()}
-
-Node Types:
-- Root: {parsed.name}
-- Sections: {len(parsed.sections)}
-- Code Blocks: {len(parsed.code_blocks)}
-- URLs: {len(parsed.urls)}
-- File Paths: {len(parsed.file_paths)}
-- Risk Nodes: {len(findings)}
-            """)
-        except Exception as e:
-            st.error(f"Graph visualization error: {e}")
-            st.info("Showing simplified graph structure:")
-            st.json({
-                'nodes': G.number_of_nodes(),
-                'edges': G.number_of_edges(),
-                'skill_name': parsed.name
-            })
-
-        st.caption("🔴 Red = Risk | 🟠 Orange = High Risk | 🟡 Yellow = Medium | 🟢 Green = Safe | 🔵 Blue = Section")
+            if low_count > 0:
+                st.markdown(f"### 🟢 Low ({low_count})")
+                for filename, f in all_findings:
+                    if f.level == RiskLevel.LOW:
+                        st.markdown(f"""
+                        <div class="risk-low">
+                            <strong>[{filename}]</strong> {f.category}<br>
+                            <code>{f.content_snippet[:80]}...</code>
+                        </div>
+                        """, unsafe_allow_html=True)
 
     with tab3:
-        st.subheader("Parsed Skill Data")
+        st.subheader("Skill Knowledge Graph")
 
-        col_a, col_b = st.columns(2)
+        if show_graph and len(skills_data) > 0:
+            try:
+                import pyvis.network
+                from pyvis.network import Network
 
-        with col_a:
-            st.markdown("**Metadata**")
-            st.json({
-                'name': parsed.name,
-                'description': parsed.description[:100] + '...' if len(parsed.description) > 100 else parsed.description,
-                'tags': parsed.tags
+                # Create combined graph for all skills
+                combined_findings = []
+                for filename, content, parsed, findings in skills_data:
+                    combined_findings.extend(findings)
+
+                # Use first skill for demo or create combined view
+                _, content, parsed, findings = skills_data[0]
+
+                G = builder.build(parsed, findings)
+
+                # Add additional nodes for other files
+                if len(skills_data) > 1:
+                    for i, (filename, _, p, f) in enumerate(skills_data[1:], 1):
+                        # Add a node for each additional file
+                        G.add_node(f"file_{i}", label=filename[:20], color="#94a3b8", size=15, type="file")
+
+                net = Network(height="500px", width="100%", directed=True)
+
+                for node_id, data in G.nodes(data=True):
+                    color = builder._get_node_color(data)
+                    size = builder._get_node_size(data)
+                    label = data.get('label', node_id)
+                    title = data.get('content', '')[:100]
+
+                    net.add_node(node_id, label=label, color=color, size=size, title=title)
+
+                for source, target, data in G.edges(data=True):
+                    net.add_edge(source, target, title=data.get('type', ''))
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as f:
+                    net.save_graph(f.name)
+                    html_content = f.read().decode('utf-8')
+
+                st.components.v1.html(html_content, height=520, scrolling=True)
+
+            except ImportError:
+                st.warning("Pyvis not installed. Install with: `pip install pyvis`")
+                st.code(f"""
+Graph Summary:
+- Total Nodes: {sum(len(s[2].sections) + len(s[2].code_blocks) + 1 for s in skills_data)}
+- Total Edges: {sum(len(s[2].sections) + len(s[2].code_blocks) for s in skills_data)}
+- Risk Nodes: {total_findings}
+                """)
+            except Exception as e:
+                st.error(f"Graph visualization error: {e}")
+
+        st.caption("🔴 Red = Critical | 🟠 Orange = High | 🟡 Yellow = Medium | 🟢 Green = Low | 🔵 Blue = Section")
+
+    with tab4:
+        st.subheader("Analysis Statistics")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Risk Distribution**")
+            risk_data = {
+                'Critical': critical_count,
+                'High': high_count,
+                'Medium': medium_count,
+                'Low': low_count,
+                'Safe': len(skills_data) - sum(1 for s in skills_data if len(s[3]) > 0)
+            }
+            st.bar_chart(risk_data)
+
+        with col2:
+            st.markdown("**Risk Categories**")
+            categories = defaultdict(int)
+            for _, _, _, findings in skills_data:
+                for f in findings:
+                    categories[f.category] += 1
+
+            if categories:
+                st.bar_chart(dict(sorted(categories.items(), key=lambda x: x[1], reverse=True)[:10]))
+            else:
+                st.info("No risks found")
+
+        st.markdown("**File Statistics**")
+        stats_data = []
+        for filename, content, parsed, findings in skills_data:
+            stats_data.append({
+                'File': filename[:30],
+                'Sections': len(parsed.sections),
+                'Code Blocks': len(parsed.code_blocks),
+                'URLs': len(parsed.urls),
+                'Findings': len(findings),
+                'Risk Level': detector.get_overall_risk(findings).value.upper()
             })
 
-        with col_b:
-            st.markdown("**Statistics**")
-            st.json({
-                'sections': len(parsed.sections),
-                'code_blocks': len(parsed.code_blocks),
-                'links': len(parsed.links),
-                'urls': len(parsed.urls),
-                'file_paths': len(parsed.file_paths)
-            })
+        if stats_data:
+            st.dataframe(stats_data, use_container_width=True)
 
-        if show_code and parsed.code_blocks:
-            st.markdown("**Code Blocks**")
-            for i, block in enumerate(parsed.code_blocks):
-                with st.expander(f"Block {i+1}: {block.get('language', 'unknown')}"):
-                    st.code(block.get('content', ''), language=block.get('language', ''))
 
-        if parsed.sections:
-            st.markdown("**Sections**")
-            for i, section in enumerate(parsed.sections):
-                with st.expander(f"{section.get('title', f'Section {i+1}')}"):
-                    st.text(section.get('content', '')[:500] + '...' if len(section.get('content', '')) > 500 else section.get('content', ''))
+def process_zip_upload(uploaded_zip, parser: SkillParser, detector: RiskDetector) -> List:
+    """Process a ZIP file containing a skill folder."""
+    skills_data = []
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Save and extract ZIP
+        zip_path = Path(temp_dir) / "upload.zip"
+        zip_path.write_bytes(uploaded_zip.read())
+
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(temp_dir)
+
+        # Find all markdown files
+        for md_file in Path(temp_dir).rglob("*.md"):
+            try:
+                content = md_file.read_text(encoding='utf-8')
+                # Skip empty or very small files
+                if len(content.strip()) > 50:
+                    parsed, findings = analyze_skill(content, parser, detector)
+                    skills_data.append((md_file.name, content, parsed, findings))
+            except Exception as e:
+                st.warning(f"Could not parse {md_file.name}: {e}")
+
+    return skills_data
+
+
+def analyze_skill(content: str, parser: SkillParser, detector: RiskDetector):
+    """Analyze a single skill."""
+    try:
+        parsed = parser.parse(content)
+        findings = detector.detect(parsed)
+        return parsed, findings
+    except Exception as e:
+        # Return minimal parsed data on error
+        from skillgraph.parser import ParsedSkill
+        return ParsedSkill(name="Error"), []
 
 
 def get_example_skill(example_name: str) -> str:

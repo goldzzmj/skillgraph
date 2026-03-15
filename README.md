@@ -8,9 +8,9 @@
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
 </p>
 
-A security scanner for AI Agent Skills using **GraphRAG + GNN**. Detect hidden risks in downloaded skills before using them.
+A security scanner for AI Agent Skills using **GraphRAG + GNN**. Detect hidden risks in downloaded skills skills before using them.
 
-[中文文档 (Chinese Documentation)](./README_ZH.md)
+[中文文档](./README_ZH.md)
 
 ## Why SkillGraph?
 
@@ -29,6 +29,7 @@ SkillGraph helps you **see through** these risks with graph-based analysis.
 - 📊 **Graph Visualization** - Interactive knowledge graph display (Pyvis)
 - 💻 **CLI Tool** - Command-line interface for quick scanning
 - 🌐 **Web UI** - Streamlit-based visualization app
+- 📁 **Folder Upload** - Upload complete skill folders (ZIP)
 
 ## Quick Start
 
@@ -78,6 +79,15 @@ streamlit run src/skillgraph/viz/app.py
 
 Open http://localhost:8501 in your browser.
 
+## Input Methods
+
+| Method | Description |
+|--------|-------------|
+| 📁 **Upload Folder (ZIP)** | Upload a complete skill folder with multiple files |
+| 📄 **Upload Files** | Upload one or more markdown files |
+| 📋 **Paste Content** | Paste skill content directly |
+| 📚 **Example Skills** | Built-in examples for testing |
+
 ## Risk Levels
 
 | Level | Score | Description |
@@ -91,14 +101,15 @@ Open http://localhost:8501 in your browser.
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────┐
 │                   SkillGraph System                  │
-├─────────────────────────────────────────────────────┤
+├─────────────────────────────────────────────┤
 │  Input Layer     │  Core Engine       │  Output Layer│
 │  - Markdown      │  - Parser          │  - Web UI    │
 │  - YAML          │  - Rules Engine    │  - CLI       │
 │  - Scripts       │  - Graph Builder   │  - API       │
-└─────────────────────────────────────────────────────┘
+│  - Folders (ZIP)  │  - GraphRAG (TODO)  │             │
+└─────────────────────────────────────────────┘
 ```
 
 ## Project Structure
@@ -113,6 +124,8 @@ skillgraph/
 │   └── cli.py           # Command-line interface
 ├── tests/               # Unit tests
 ├── examples/            # Example skill files
+├── README.md            # English documentation
+├── README_ZH.md          # Chinese documentation
 ├── requirements.txt
 └── setup.py
 ```
@@ -121,6 +134,7 @@ skillgraph/
 
 - [x] MVP: Parser + Rules + CLI
 - [x] Streamlit Visualization (Pyvis)
+- [x] Folder Upload Support (ZIP)
 - [ ] GraphRAG Integration
 - [ ] GNN Risk Model
 - [ ] FastAPI Service

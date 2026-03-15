@@ -10,7 +10,7 @@
 
 基于 **GraphRAG + GNN** 的 AI Agent Skills 安全扫描器。 在使用从网上下载的 skills 之前，检测其中的隐藏风险。
 
-[English Documentation (英文文档)](./README.md)
+[English Documentation](./README.md)
 
 ## 为什么选择 SkillGraph？
 
@@ -29,6 +29,7 @@ SkillGraph 通过图谱分析帮你**看穿**这些风险。
 - 📊 **Graph Visualization** - 交互式知识图谱展示 (Pyvis)
 - 💻 **CLI Tool** - 命令行快速扫描工具
 - 🌐 **Web UI** - Streamlit 可视化应用
+- 📁 **Folder Upload** - 上传完整 skill 文件夹 (ZIP)
 
 ## 快速开始
 
@@ -78,6 +79,15 @@ streamlit run src/skillgraph/viz/app.py
 
 在浏览器中打开 http://localhost:8501
 
+## 输入方式
+
+| 方式 | 描述 |
+|------|------|
+| 📁 **上传文件夹 (ZIP)** | 上传包含多个文件的完整 skill 文件夹 |
+| 📄 **上传文件** | 上传一个或多个 markdown 文件 |
+| 📋 **粘贴内容** | 直接粘贴 skill 内容 |
+| 📚 **示例 Skills** | 内置示例用于测试 |
+
 ## 风险等级
 
 | 等级 | 分数 | 描述 |
@@ -91,14 +101,15 @@ streamlit run src/skillgraph/viz/app.py
 ## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────┐
+┌─────────────────────────────────────────────┐
 │                   SkillGraph System                  │
-├─────────────────────────────────────────────────────┤
+├─────────────────────────────────────────────┤
 │  输入层          │  核心引擎        │  输出层         │
 │  - Markdown      │  - Parser        │  - Web UI       │
 │  - YAML          │  - Rules Engine  │  - CLI          │
 │  - Scripts       │  - Graph Builder │  - API          │
-└─────────────────────────────────────────────────────┘
+│  - Folders (ZIP)  │  - GraphRAG (TODO)  │             │
+└─────────────────────────────────────────────┘
 ```
 
 ## 项目结构
@@ -113,6 +124,8 @@ skillgraph/
 │   └── cli.py           # 命令行接口
 ├── tests/               # 单元测试
 ├── examples/            # 示例 skill 文件
+├── README.md            # 英文文档
+├── README_ZH.md          # 中文文档
 ├── requirements.txt
 └── setup.py
 ```
@@ -121,6 +134,7 @@ skillgraph/
 
 - [x] MVP: Parser + Rules + CLI
 - [x] Streamlit 可视化 (Pyvis)
+- [x] 文件夹上传支持 (ZIP)
 - [ ] GraphRAG 集成
 - [ ] GNN 风险模型
 - [ ] FastAPI 服务
