@@ -1,0 +1,193 @@
+version: '3.8'
+
+services:
+  # SkillGraph API Service
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: skillgraph-api:latest
+    container_name: skillgraph-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - SKILLGRAPH_ENV=${SKILLGRAPH_ENV:-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-skillgraph}:${POSTGRES_PASSWORD:-skillgraph_password}@postgres:5432/${POSTGRES_DB:-skillgraph}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS:-*}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - skillgraph-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: skillgraph-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skillgraph}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillgraph_password}
+      POSTGRES_DB: ${POSTGRES_DB:-skillgraph}
+      POSTGRES_INITDB_ARGS: "-E UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./config/init.sql:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - skillgraph-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-skillgraph} -d ${POSTGRES_DB:-skillgraph}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: skillgraph-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-skillgraph_redis_password}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - skillgraph-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Celery Worker (Background Tasks)
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: skillgraph-api:latest
+    container_name: skillgraph-celery-worker
+    command: celery -A skillgraph.tasks worker --loglevel=info --concurrency=2
+    environment:
+      - SKILLGRAPH_ENV=${SKILLGRAPH_ENV:-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-skillgraph}:${POSTGRES_PASSWORD:-skillgraph_password}@postgres:5432/${POSTGRES_DB:-skillgraph}
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./models:/app/models
+      - ./config:/app/config
+    depends_on:
+      - postgres
+      - redis
+      - api
+    networks:
+      - skillgraph-network
+    restart: unless-stopped
+
+  # Celery Beat (Scheduler)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: skillgraph-api:latest
+    container_name: skillgraph-celery-beat
+    command: celery -A skillgraph.beat beat --loglevel=info --scheduler /app/celerybeat-schedule
+    environment:
+      - SKILLGRAPH_ENV=${SKILLGRAPH_ENV:-production}
+      - REDIS_URL=redis://redis:6379
+      - CELERY_BROKER_URL=redis://redis:6379
+    volumes:
+      - ./config/celerybeat-schedule.py:/app/celerybeat-schedule.py
+    depends_on:
+      - redis
+    networks:
+      - skillgraph-network
+    restart: unless-stopped
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: skillgraph-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - skillgraph-network
+    restart: unless-stopped
+
+  # Grafana Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: skillgraph-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./config/grafana:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - skillgraph-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: skillgraph-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+    networks:
+      - skillgraph-network
+    restart: unless-stopped
+
+networks:
+  skillgraph-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
