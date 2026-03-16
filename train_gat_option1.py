@@ -30,7 +30,6 @@ except ImportError:
 try:
     from torch_geometric.nn import GATConv
     from torch_geometric.data import Data
-    from torch_geometric.utils import k_hop_subgraph
     TORCH_GEOMETRIC_AVAILABLE = True
 except ImportError:
     TORCH_GEOMETRIC_AVAILABLE = False
@@ -77,8 +76,7 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
             description=f"High-risk {entity_type}: {name}",
             embedding=np.random.randn(1536).astype(np.float32),
             risk_score=0.8 + np.random.rand() * 0.2,
-            confidence=0.9,
-            properties={'source': 'rule_based_detection'}
+            confidence=0.9
         )
         entities.append(entity)
 
@@ -91,7 +89,7 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
         medium_risk_names = [
             'config_file', 'api_call', 'external_service', 'write_file',
             'read_database', 'execute_command', 'network_request',
-            'modify_config', 'http_request', 'network_endpoint'
+            'modify_config', 'http_request'
         ]
 
         name = medium_risk_names[i % len(medium_risk_names)]
@@ -103,8 +101,7 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
             description=f"Medium-risk {entity_type}: {name}",
             embedding=np.random.randn(1536).astype(np.float32),
             risk_score=0.5 + np.random.rand() * 0.3,
-            confidence=0.8,
-            properties={'source': 'rule_based_detection'}
+            confidence=0.8
         )
         entities.append(entity)
 
@@ -117,8 +114,7 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
         low_risk_names = [
             'read_only', 'log_entry', 'cache_file', 'temp_file',
             'info_display', 'safe_operation', 'validation',
-            'check_permission', 'verify_user', 'local_variable',
-            'print_output', 'return_value', 'safe_function'
+            'check_permission', 'verify_user', 'local_variable'
         ]
 
         name = low_risk_names[i % len(low_risk_names)]
@@ -130,8 +126,7 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
             description=f"Low-risk {entity_type}: {name}",
             embedding=np.random.randn(1536).astype(np.float32),
             risk_score=0.1 + np.random.rand() * 0.2,
-            confidence=0.9,
-            properties={'source': 'rule_based_detection'}
+            confidence=0.9
         )
         entities.append(entity)
 
@@ -140,8 +135,8 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
     num_relationships = int(num_entities * 1.5)
 
     for i in range(num_relationships):
-        source_idx = np.random.randint(0, num_entities)
-        target_idx = np.random.randint(0, num_entities)
+        source_idx = np.random.randint(0, num_entities - 1)
+        target_idx = np.random.randint(0, num_entities - 1)
 
         if source_idx != target_idx:
             source = entities[source_idx]
@@ -151,15 +146,19 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
                 RelationType.CALLS,
                 RelationType.DEPENDS_ON,
                 RelationType.ACCESSES,
-                RelationType.MODIFIES
+                RelationType.MODIFIES,
                 RelationType.REQUIRES,
-                RelationType.VALIDATES
+                RelationType.VALIDATES,
+                RelationType.TRANSFORMS,
+                RelationType.AUTHENTICATES
             ]
+
+            rel_type = rel_types[np.random.randint(0, len(rel_types))]
 
             rel = Relation(
                 source_id=source.id,
                 target_id=target.id,
-                type=rel_types[np.random.randint(0, len(rel_types))],
+                type=rel_type,
                 description=f"{source.name} connects to {target.name}",
                 weight=1.0,
                 confidence=0.9
@@ -176,7 +175,7 @@ def create_mock_skill_data(num_entities: int = 100) -> tuple:
             'content_snippet': f"Detected high-risk {entity.type.value}: {entity.name}",
             'severity': 'critical' if entity.risk_score > 0.9 else 'high',
             'confidence': 0.9,
-            'rule_id': f"rule_{entity.type.value}_{entity.name.replace('.', '_')}"
+            'risk_score': entity.risk_score
         }
         risk_findings.append(finding)
 
@@ -204,7 +203,13 @@ def prepare_graph_data(entities, relationships):
     # Prepare node features
     node_features = []
     for entity in entities:
-        node_features.append(entity.embedding)
+        embedding = getattr(entity, 'embedding', None)
+
+        if embedding is None:
+            # Random embedding if not available
+            embedding = np.random.randn(1536).astype(np.float32)
+
+        node_features.append(embedding)
 
     node_features = torch.FloatTensor(np.array(node_features))
 
@@ -218,11 +223,13 @@ def prepare_graph_data(entities, relationships):
 
         if source_idx is not None and target_idx is not None:
             edge_list.append([source_idx, target_idx])
+            edge_list.append([target_idx, source_idx])  # Undirected
 
     if len(edge_list) == 0:
         # Create a simple chain graph if no edges
         for i in range(len(entities) - 1):
             edge_list.append([i, i + 1])
+            edge_list.append([i + 1, i])
 
     edge_index = torch.tensor(edge_list, dtype=torch.long).t().contiguous()
 
@@ -240,38 +247,43 @@ def prepare_graph_data(entities, relationships):
 
 def train_gat_model(data, config):
     """
-    Train GAT risk model.
+    Train GAT model.
 
     Args:
         data: PyTorch Geometric Data object
         config: Configuration dictionary
 
     Returns:
-        Trained model and metrics
+        Trained model and training metrics
     """
     print("\n[INFO] Training GAT model...")
 
+    device = config['training']['device']
+    val_split = config['training']['val_split']
+    epochs = config['training']['epochs']
+    learning_rate = config['training']['learning_rate']
+    weight_decay = config['training']['weight_decay']
+    patience = config['training']['patience']
+    min_delta = config['training']['min_delta']
+
     # Create model
     model = GATRiskModel(
-        in_channels=config['in_channels'],
-        hidden_channels=config['hidden_channels'],
-        out_channels=config['out_channels'],
-        num_heads=config['num_heads'],
-        dropout=config['dropout'],
-        num_layers=config['num_layers'],
-        use_autoencoder=config.get('use_autoencoder', True),
-        reconstruction_weight=config.get('reconstruction_weight', 0.3),
-        risk_weight=config.get('risk_weight', 0.7)
-    ).to(config['device'])
-
-    print(f"   Model created: {model}")
-    print(f"   Device: {config['device']}")
+        in_channels=config['model']['in_channels'],
+        hidden_channels=config['model']['hidden_channels'],
+        out_channels=config['model']['out_channels'],
+        num_heads=config['model']['num_heads'],
+        dropout=config['model']['dropout'],
+        num_layers=config['model']['num_layers'],
+        use_autoencoder=config['model']['use_autoencoder'],
+        reconstruction_weight=config['model']['reconstruction_weight'],
+        risk_weight=config['model']['risk_weight']
+    ).to(device)
 
     # Optimizer
     optimizer = optim.Adam(
         model.parameters(),
-        lr=config['learning_rate'],
-        weight_decay=config.get('weight_decay', 5e-4)
+        lr=learning_rate,
+        weight_decay=weight_decay
     )
 
     # Scheduler
@@ -279,8 +291,8 @@ def train_gat_model(data, config):
         optimizer,
         mode='min',
         factor=0.5,
-        patience=config.get('patience', 10),
-        min_lr=config['learning_rate'] * 0.01
+        patience=patience,
+        min_lr=learning_rate * 0.01
     )
 
     # Training loop
@@ -288,32 +300,36 @@ def train_gat_model(data, config):
     best_val_loss = float('inf')
     train_losses = []
     val_losses = []
+    best_model_state = None
 
-    # Simple train/val split
-    val_size = int(data.num_nodes * config.get('val_split', 0.2))
+    # Create train/val mask
+    val_size = int(data.num_nodes * val_split)
     train_mask = torch.ones(data.num_nodes, dtype=torch.bool)
     train_mask[:val_size] = False
 
     print(f"   Training samples: {data.num_nodes - val_size}")
     print(f"   Validation samples: {val_size}")
-    print(f"   Epochs: {config['epochs']}")
+    print(f"   Epochs: {epochs}")
 
-    for epoch in range(config['epochs']):
+    for epoch in range(epochs):
         optimizer.zero_grad()
 
         # Forward pass
         risk_scores, confidence_scores, reconstructed_x, _ = model(
-            data.x.to(config['device']),
-            data.edge_index.to(config['device']),
+            data.x.to(device),
+            data.edge_index.to(device),
             return_attention=False
         )
 
         # Loss function
-        if config.get('use_autoencoder', True):
+        if config['model']['use_autoencoder']:
             # Combined loss: risk prediction + reconstruction
+            # Note: Using zeros as pseudo-labels for now
+            pseudo_labels = torch.zeros_like(risk_scores[train_mask])
+
             risk_loss = nn.BCEWithLogitsLoss()(
                 risk_scores[train_mask],
-                torch.zeros_like(risk_scores[train_mask])  # Use pseudo-labels later
+                pseudo_labels
             )
 
             recon_loss = nn.MSELoss()(
@@ -322,17 +338,16 @@ def train_gat_model(data, config):
             )
 
             total_loss = (
-                config['risk_weight'] * risk_loss +
-                config['reconstruction_weight'] * recon_loss
+                config['model']['risk_weight'] * risk_loss +
+                config['model']['reconstruction_weight'] * recon_loss
             )
         else:
             # Only risk prediction loss
-            risk_loss = nn.BCEWithLogitsLoss()(
+            pseudo_labels = torch.zeros_like(risk_scores[train_mask])
+            total_loss = nn.BCEWithLogitsLoss()(
                 risk_scores[train_mask],
-                torch.zeros_like(risk_scores[train_mask])
+                pseudo_labels
             )
-
-            total_loss = risk_loss
 
         # Backward pass
         total_loss.backward()
@@ -341,21 +356,23 @@ def train_gat_model(data, config):
         # Track losses
         train_losses.append(total_loss.item())
 
-        # Simple validation (use last 20% as val)
+        # Validation
         val_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
-        val_mask[-val_size:] = True
+        val_mask[:val_size] = True
 
+        model.eval()
         with torch.no_grad():
             val_risk_scores, _, val_reconstructed_x, _ = model(
-                data.x.to(config['device']),
-                data.edge_index.to(config['device']),
+                data.x.to(device),
+                data.edge_index.to(device),
                 return_attention=False
             )
 
-            if config.get('use_autoencoder', True):
+            if config['model']['use_autoencoder']:
+                val_pseudo_labels = torch.zeros_like(val_risk_scores[val_mask])
                 val_risk_loss = nn.BCEWithLogitsLoss()(
                     val_risk_scores[val_mask],
-                    torch.zeros_like(val_risk_scores[val_mask])
+                    val_pseudo_labels
                 ).item()
 
                 val_recon_loss = nn.MSELoss()(
@@ -364,25 +381,20 @@ def train_gat_model(data, config):
                 ).item()
 
                 val_loss = (
-                    config['risk_weight'] * val_risk_loss +
-                    config['reconstruction_weight'] * val_recon_loss
+                    config['model']['risk_weight'] * val_risk_loss +
+                    config['model']['reconstruction_weight'] * val_recon_loss
                 )
             else:
+                val_pseudo_labels = torch.zeros_like(val_risk_scores[val_mask])
                 val_loss = nn.BCEWithLogitsLoss()(
                     val_risk_scores[val_mask],
-                    torch.zeros_like(val_risk_scores[val_mask])
+                    val_pseudo_labels
                 ).item()
 
-        val_losses.append(val_loss)
+        model.train()
 
-        # Learning rate scheduling
+        # Step scheduler
         scheduler.step(val_loss)
-
-        # Logging
-        if (epoch + 1) % 10 == 0:
-            print(f"   Epoch {epoch+1}/{config['epochs']}: "
-                  f"Train Loss: {total_loss.item():.4f}, "
-                  f"Val Loss: {val_loss:.4f}")
 
         # Save best model
         if val_loss < best_val_loss:
@@ -391,76 +403,32 @@ def train_gat_model(data, config):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
-                'epoch': epoch,
-                'val_loss': val_loss
+                'epoch': epoch
             }
+
+        # Logging
+        if (epoch + 1) % 10 == 0:
+            print(f"   Epoch {epoch+1}/{epochs}: "
+                  f"Train Loss: {total_loss.item():.4f}, "
+                  f"Val Loss: {val_loss:.4f}")
 
     # Final metrics
     metrics = {
-        'final_train_loss': train_losses[-1],
+        'final_train_loss': train_losses[-1] if train_losses else None,
         'final_val_loss': best_val_loss,
-        'best_val_loss': best_val_loss,
         'min_train_loss': min(train_losses) if train_losses else None,
         'max_train_loss': max(train_losses) if train_losses else None,
         'avg_train_loss': np.mean(train_losses) if train_losses else None,
         'all_train_losses': train_losses,
-        'all_val_losses': val_losses,
         'num_epochs': epoch + 1
     }
 
     print(f"\n[INFO] Training completed!")
     print(f"   Final train loss: {metrics['final_train_loss']:.4f}")
-    print(f"   Best val loss: {metrics['best_val_loss']:.4f}")
+    print(f"   Best val loss: {metrics['final_val_loss']:.4f}")
+    print(f"   Epochs: {metrics['num_epochs']}")
 
     return model, metrics
-
-
-def save_model(model, metrics, output_dir, config):
-    """
-    Save model and metrics.
-
-    Args:
-        model: Trained model
-        metrics: Training metrics
-        output_dir: Output directory
-        config: Configuration dictionary
-    """
-    print(f"\n[INFO] Saving model and metrics...")
-
-    # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Save model
-    model_path = os.path.join(output_dir, 'gat_risk_model.pt')
-
-    checkpoint = {
-        'model_state_dict': model.state_dict(),
-        'config': config,
-        'metrics': metrics,
-        'timestamp': datetime.now().isoformat(),
-        'torch_version': torch.__version__,
-        'torch_geometric_version': 'installed'
-    }
-
-    torch.save(checkpoint, model_path)
-    print(f"   Model saved to: {model_path}")
-
-    # Save metrics
-    metrics_path = os.path.join(output_dir, 'training_metrics.json')
-
-    serializable_metrics = {}
-    for key, value in metrics.items():
-        if isinstance(value, list):
-            serializable_metrics[key] = value
-        elif isinstance(value, np.ndarray):
-            serializable_metrics[key] = value.tolist()
-        else:
-            serializable_metrics[key] = value
-
-    with open(metrics_path, 'w', encoding='utf-8') as f:
-        json.dump(serializable_metrics, f, indent=2)
-
-    print(f"   Metrics saved to: {metrics_path}")
 
 
 def evaluate_model(model, data, entities):
@@ -475,14 +443,16 @@ def evaluate_model(model, data, entities):
     Returns:
         Evaluation results
     """
-    print(f"\n[INFO] Evaluating model...")
+    print("\n[INFO] Evaluating model...")
 
     model.eval()
+    device = next(model.parameters()).device
 
     with torch.no_grad():
+        # Forward pass
         risk_scores, confidence_scores, _, attention_weights = model(
-            data.x.to(data.x.device),
-            data.edge_index.to(data.edge_index.device),
+            data.x.to(device),
+            data.edge_index.to(device),
             return_attention=True
         )
 
@@ -492,13 +462,11 @@ def evaluate_model(model, data, entities):
 
     # Analyze results
     high_risk_indices = np.where(risk_scores > 0.5)[0]
-    medium_risk_indices = np.where((risk_scores > 0.3) & (risk_scores <= 0.5))[0]
-    low_risk_indices = np.where(risk_scores <= 0.3)[0]
+    low_risk_indices = np.where(risk_scores <= 0.5)[0]
 
     print(f"   Total entities: {len(risk_scores)}")
-    print(f"   High-risk entities (>0.5): {len(high_risk_indices)}")
-    print(f"   Medium-risk entities (0.3-0.5): {len(medium_risk_indices)}")
-    print(f"   Low-risk entities (<0.3): {len(low_risk_indices)}")
+    print(f"   High-risk entities: {len(high_risk_indices)} ({len(high_risk_indices)/len(risk_scores)*100:.1f}%)")
+    print(f"   Low-risk entities: {len(low_risk_indices)} ({len(low_risk_indices)/len(risk_scores)*100:.1f}%)")
     print(f"   Average risk score: {np.mean(risk_scores):.3f}")
 
     # Prepare results
@@ -508,66 +476,101 @@ def evaluate_model(model, data, entities):
         risk_score = float(risk_scores[i])
         confidence = float(confidence_scores[i])
 
-        # Determine risk level
+        # Interpret risk level
         if risk_score >= 0.8:
             risk_level = "critical"
         elif risk_score >= 0.6:
             risk_level = "high"
-        elif risk_score >= 0.3:
+        elif risk_score >= 0.4:
             risk_level = "medium"
-        else:
+        elif risk_score >= 0.2:
             risk_level = "low"
+        else:
+            risk_level = "safe"
 
-        # Determine if prediction is correct
-        is_high_risk = entity.risk_score > 0.6
-        is_predicted_high_risk = risk_score > 0.5
-        is_correct = is_high_risk == is_predicted_high_risk
+        # Update entity risk score
+        entity.risk_score = risk_score
 
         result = {
             'entity_id': entity.id,
             'entity_name': entity.name,
             'entity_type': entity.type.value,
-            'true_risk_score': entity.risk_score,
-            'true_risk_level': "high" if entity.risk_score > 0.6 else "low",
-            'predicted_risk_score': risk_score,
-            'predicted_risk_level': risk_level,
+            'risk_score': risk_score,
             'confidence': confidence,
-            'is_correct': is_correct
-            'is_high_risk_entity': entity.risk_score > 0.6
+            'risk_level': risk_level
         }
         results.append(result)
 
-    # Calculate accuracy metrics
-    correct = sum(1 for r in results if r['is_correct'])
-    total = len(results)
-    accuracy = correct / total if total > 0 else 0.0
+    # Calculate risk distribution
+    high_risk_count = sum(1 for r in results if r['risk_score'] > 0.6)
+    medium_risk_count = sum(1 for r in results if 0.4 < r['risk_score'] <= 0.6)
+    low_risk_count = sum(1 for r in results if 0.2 < r['risk_score'] <= 0.4)
+    safe_count = sum(1 for r in results if r['risk_score'] <= 0.2)
 
-    high_risk_entities = [r for r in results if r['is_high_risk_entity']]
-    predicted_high_risk = [r for r in results if r['predicted_risk_score'] > 0.5]
-
-    if len(high_risk_entities) > 0:
-        high_risk_precision = sum(1 for r in predicted_high_risk if r['is_high_risk_entity']) / len(predicted_high_risk)
-    else:
-        high_risk_precision = 0.0
-
-    metrics = {
-        'accuracy': accuracy,
-        'num_correct': correct,
-        'num_total': total,
-        'high_risk_precision': high_risk_precision,
-        'num_high_risk_entities': len(high_risk_entities),
-        'num_predicted_high_risk': len(predicted_high_risk),
-        'avg_true_risk_score': np.mean([r['true_risk_score'] for r in results]),
-        'avg_predicted_risk_score': np.mean([r['predicted_risk_score'] for r in results])
-        'results': results
+    return {
+        'predictions': results,
+        'avg_risk_score': float(np.mean(risk_scores)),
+        'high_risk_count': high_risk_count,
+        'medium_risk_count': medium_risk_count,
+        'low_risk_count': low_risk_count,
+        'safe_count': safe_count,
+        'risk_distribution': {
+            'critical': sum(1 for r in results if r['risk_score'] >= 0.8),
+            'high': sum(1 for r in results if 0.6 < r['risk_score'] < 0.8),
+            'medium': sum(1 for r in results if 0.4 < r['risk_score'] < 0.6),
+            'low': sum(1 for r in results if 0.2 < r['risk_score'] < 0.4),
+            'safe': sum(1 for r in results if r['risk_score'] <= 0.2)
+        }
     }
 
-    print(f"\n[INFO] Evaluation completed!")
-    print(f"   Accuracy: {accuracy:.2%}")
-    print(f"   High-risk precision: {high_risk_precision:.2%}")
-    print(f"   Correct predictions: {correct}/{total}")
 
-    return metrics
+def save_results(model, metrics, evaluation_results, config):
+    """
+    Save model and results.
+
+    Args:
+        model: Trained model
+        metrics: Training metrics
+        evaluation_results: Evaluation results
+        config: Configuration
+    """
+    print("\n[INFO] Saving model and results...")
+
+    # Create output directory
+    output_dir = config['output']['output_dir']
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Save model
+    model_path = os.path.join(output_dir, config['output']['model_filename'])
+
+    checkpoint = {
+        'model_state_dict': model.state_dict(),
+        'config': config,
+        'training_metrics': metrics,
+        'evaluation_results': evaluation_results,
+        'timestamp': datetime.now().isoformat(),
+        'torch_version': torch.__version__,
+        'torch_geometric_version': 'installed'
+    }
+
+    torch.save(checkpoint, model_path)
+    print(f"   Model saved to: {model_path}")
+
+    # Save evaluation results
+    evaluation_path = os.path.join(output_dir, 'evaluation_results.json')
+
+    with open(evaluation_path, 'w', encoding='utf-8') as f:
+        json.dump(evaluation_results, f, indent=2, default=str)
+
+    print(f"   Evaluation saved to: {evaluation_path}")
+
+    # Save training metrics
+    metrics_path = os.path.join(output_dir, 'training_metrics.json')
+
+    with open(metrics_path, 'w', encoding='utf-8') as f:
+        json.dump(metrics, f, indent=2, default=str)
+
+    print(f"   Metrics saved to: {metrics_path}")
 
 
 def main():
@@ -580,8 +583,8 @@ def main():
     # Configuration
     config = {
         'data': {
-            'num_entities': 100,  # Number of mock entities
-            'high_risk_ratio': 0.3  # Ratio of high-risk entities
+            'num_entities': 100,
+            'high_risk_ratio': 0.3
         },
         'model': {
             'in_channels': 1536,
@@ -596,7 +599,7 @@ def main():
         },
         'training': {
             'learning_rate': 0.001,
-            'epochs': 100,
+            'epochs': 50,
             'batch_size': 32,
             'patience': 10,
             'min_delta': 0.001,
@@ -615,82 +618,65 @@ def main():
         print(f"[INFO] Using CUDA: {torch.cuda.get_device_name(0)}")
     else:
         config['training']['device'] = 'cpu'
-        print(f"[INFO] Using CPU")
+        print("[INFO] Using CPU")
 
     # Step 1: Create mock data
+    print("\n[1] Creating mock training data...")
     entities, relationships, risk_findings = create_mock_skill_data(
         num_entities=config['data']['num_entities']
     )
 
     # Step 2: Prepare graph data
+    print("\n[2] Preparing graph data...")
     data = prepare_graph_data(entities, relationships)
 
     # Step 3: Train model
-    model, training_metrics = train_gat_model(data, config['training'])
+    print("\n[3] Training GAT model...")
+    model, metrics = train_gat_model(data, config)
 
-    # Step 4: Save model
-    output_dir = config['output']['output_dir']
-    save_model(model, training_metrics, output_dir, config)
+    # Step 4: Evaluate model
+    print("\n[4] Evaluating model...")
+    evaluation_results = evaluate_model(model, data, entities)
 
-    # Step 5: Evaluate model
-    evaluation_metrics = evaluate_model(model, data, entities)
+    # Step 5: Save results
+    print("\n[5] Saving results...")
+    save_results(model, metrics, evaluation_results, config)
 
-    # Step 6: Save evaluation results
-    evaluation_path = os.path.join(output_dir, 'evaluation_results.json')
-
-    serializable_eval = {}
-    for key, value in evaluation_metrics.items():
-        if key != 'results':
-            serializable_eval[key] = value
-        elif isinstance(value, list):
-            serializable_eval[key] = [
-                {k: v for k, v in r.items() if not isinstance(v, (list, dict, np.ndarray))}
-                for r in value
-            ]
-        else:
-            pass
-
-    with open(evaluation_path, 'w', encoding='utf-8') as f:
-        json.dump(serializable_eval, f, indent=2)
-
-    print(f"   Evaluation results saved to: {evaluation_path}")
-
-    # Step 7: Summary
+    # Summary
     print("\n" + "=" * 70)
     print("Training Complete!")
     print("=" * 70)
 
     print(f"\nTraining Results:")
-    print(f"  Final train loss: {training_metrics['final_train_loss']:.4f}")
-    print(f"  Best val loss: {training_metrics['best_val_loss']:.4f}")
-    print(f"  Epochs: {training_metrics['num_epochs']}")
+    print(f"  Epochs: {metrics['num_epochs']}")
+    print(f"  Final train loss: {metrics['final_train_loss']:.4f}")
+    print(f"  Best val loss: {metrics['final_val_loss']:.4f}")
 
     print(f"\nEvaluation Results:")
-    print(f"  Accuracy: {evaluation_metrics['accuracy']:.2%}")
-    print(f"  High-risk precision: {evaluation_metrics['high_risk_precision']:.2%}")
-    print(f"  Correct predictions: {evaluation_metrics['num_correct']}/{evaluation_metrics['num_total']}")
+    print(f"  Total entities: {len(evaluation_results['predictions'])}")
+    print(f"  High-risk: {evaluation_results['high_risk_count']}")
+    print(f"  Medium-risk: {evaluation_results['medium_risk_count']}")
+    print(f"  Low-risk: {evaluation_results['low_risk_count']}")
+    print(f"  Safe: {evaluation_results['safe_count']}")
 
     print(f"\nRisk Distribution:")
-    print(f"  Avg true risk: {evaluation_metrics['avg_true_risk_score']:.3f}")
-    print(f"  Avg predicted risk: {evaluation_metrics['avg_predicted_risk_score']:.3f}")
+    print(f"  Critical: {evaluation_results['risk_distribution']['critical']}")
+    print(f"  High: {evaluation_results['risk_distribution']['high']}")
+    print(f"  Medium: {evaluation_results['risk_distribution']['medium']}")
+    print(f"  Low: {evaluation_results['risk_distribution']['low']}")
+    print(f"  Safe: {evaluation_results['risk_distribution']['safe']}")
 
     print(f"\nModel Info:")
-    print(f"  Model type: GAT (Graph Attention Network)")
-    print(f"  Num heads: {config['model']['num_heads']}")
+    print(f"  Type: GAT (Graph Attention Network)")
+    print(f"  Heads: {config['model']['num_heads']}")
     print(f"  Hidden dim: {config['model']['hidden_channels']}")
     print(f"  Dropout: {config['model']['dropout']}")
 
-    print(f"\nOutput Files:")
-    print(f"  Model: {os.path.join(output_dir, config['output']['model_filename'])}")
-    print(f"  Training metrics: {os.path.join(output_dir, 'training_metrics.json')}")
-    print(f"  Evaluation results: {os.path.join(output_dir, 'evaluation_results.json')}")
-
     print("\n" + "=" * 70)
-    print("Next Steps:")
-    print("1. Review training metrics")
-    print("2. Test model on real skill files")
-    print("3. Adjust hyperparameters if needed")
-    print("4. Integrate model into SkillGraph pipeline")
+    print("Output Files:")
+    print(f"  Model: {os.path.join(config['output']['output_dir'], config['output']['model_filename'])}")
+    print(f"  Metrics: {os.path.join(config['output']['output_dir'], 'training_metrics.json')}")
+    print(f"  Evaluation: {os.path.join(config['output']['output_dir'], 'evaluation_results.json')}")
     print("=" * 70)
 
 
