@@ -4,6 +4,8 @@ API Middleware Package
 Contains middleware for FastAPI application:
 - Rate limiting
 - API key authentication
+- Permission control
+- OAuth 2.0 scopes
 - Error handling
 - Logging
 """
@@ -50,6 +52,39 @@ from .logging import (
     get_logging_context
 )
 
+from .permission import (
+    Permission,
+    Role,
+    Scope,
+    has_permission,
+    has_scope_permission,
+    require_permission,
+    require_permissions,
+    require_role,
+    require_any_role,
+    require_scope,
+    require_any_scope,
+    require_scope_permission,
+    require_api_key_permissions,
+    get_current_user,
+    check_api_key_permissions,
+    inherits_permission
+)
+
+from .oauth_scopes import (
+    OAUTH_SCOPES,
+    ScopePermission,
+    get_scope_permissions,
+    validate_scopes,
+    check_scope_permissions,
+    get_all_scopes,
+    get_scope_for_permission,
+    get_permissions_for_scope,
+    get_scopes_for_role,
+    require_oauth_scopes,
+    require_any_oauth_scope
+)
+
 __all__ = [
     # Rate limiting
     'RateLimitMiddleware',
@@ -87,5 +122,36 @@ __all__ = [
     'RequestLoggingMiddleware',
     'ResponseLoggingMiddleware',
     'LoggingContext',
-    'get_logging_context'
+    'get_logging_context',
+
+    # Permission control
+    'Permission',
+    'Role',
+    'Scope',
+    'has_permission',
+    'has_scope_permission',
+    'require_permission',
+    'require_permissions',
+    'require_role',
+    'require_any_role',
+    'require_scope',
+    'require_any_scope',
+    'require_scope_permission',
+    'require_api_key_permissions',
+    'get_current_user',
+    'check_api_key_permissions',
+    'inherits_permission',
+
+    # OAuth 2.0 scopes
+    'OAUTH_SCOPES',
+    'ScopePermission',
+    'get_scope_permissions',
+    'validate_scopes',
+    'check_scope_permissions',
+    'get_all_scopes',
+    'get_scope_for_permission',
+    'get_permissions_for_scope',
+    'get_scopes_for_role',
+    'require_oauth_scopes',
+    'require_any_oauth_scope'
 ]
