@@ -14,7 +14,6 @@ import numpy as np
 import io
 import zipfile
 import json
-import html
 import re
 from collections import Counter
 
@@ -378,6 +377,7 @@ async def scan_skill_upload(
         "relationships": all_relationships,
         "risk_findings": all_risk_findings,
         "recommendations": recommendations,
+        "graph_preview_url": f"/api/v1/scan/upload/preview?scan_id={scan_id}" if include_graph else None,
         "graph": {
             "nodes": graph_data["nodes"],
             "edges": graph_data["edges"],
@@ -1126,11 +1126,17 @@ def _build_graph_view(
     return {"nodes": nodes, "edges": edges, "legend": legend}
 
 
+def _json_for_html_script(data: Any) -> str:
+    """Serialize JSON safely for embedding in HTML script blocks."""
+    text = json.dumps(data, ensure_ascii=False)
+    return text.replace("</", "<\\/").replace("<", "\\u003c")
+
+
 def _build_graph_html(graph_data: Dict[str, Any]) -> str:
     """Build interactive HTML graph with click-to-locate detail panel."""
-    nodes_json = json.dumps(graph_data.get("nodes", []), ensure_ascii=False)
-    edges_json = json.dumps(graph_data.get("edges", []), ensure_ascii=False)
-    legend_json = json.dumps(graph_data.get("legend", []), ensure_ascii=False)
+    nodes_json = _json_for_html_script(graph_data.get("nodes", []))
+    edges_json = _json_for_html_script(graph_data.get("edges", []))
+    legend_json = _json_for_html_script(graph_data.get("legend", []))
 
     return (
         "<!DOCTYPE html>"
@@ -1156,10 +1162,13 @@ def _build_graph_html(graph_data: Dict[str, Any]) -> str:
         "<div class='title'>Legend</div>"
         "<ul id='legend'></ul>"
         "</div></div>"
+        f"<script id='sg-nodes' type='application/json'>{nodes_json}</script>"
+        f"<script id='sg-edges' type='application/json'>{edges_json}</script>"
+        f"<script id='sg-legend' type='application/json'>{legend_json}</script>"
         "<script>"
-        f"const nodeData = {nodes_json};"
-        f"const edgeData = {edges_json};"
-        f"const legendData = {legend_json};"
+        "const nodeData = JSON.parse(document.getElementById('sg-nodes').textContent || '[]');"
+        "const edgeData = JSON.parse(document.getElementById('sg-edges').textContent || '[]');"
+        "const legendData = JSON.parse(document.getElementById('sg-legend').textContent || '[]');"
         "const nodes = new vis.DataSet(nodeData);"
         "const edges = new vis.DataSet(edgeData.map((e)=>({from:e.from,to:e.to,label:e.label,color:e.color,width:e.width||1,arrows:e.arrows||'to'})));"
         "const container = document.getElementById('graph');"
