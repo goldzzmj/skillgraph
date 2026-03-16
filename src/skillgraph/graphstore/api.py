@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Dict, Any, Optional
 import logging
 
-from ..models import (
+from .models import (
     BaseNode,
     EntityNode,
     OperationNode,
@@ -18,8 +18,7 @@ from ..models import (
     NodeType,
     OperationType
 )
-from ..dependencies import get_graph_store
-from ..graphstore.neo4j_store import Neo4jGraphStore, MockGraphStore
+from .neo4j_store import Neo4jGraphStore, MockGraphStore, get_graph_store
 
 logger = logging.getLogger(__name__)
 

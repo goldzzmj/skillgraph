@@ -11,10 +11,10 @@ import uuid
 import time
 import numpy as np
 
-from ..models import SkillScanRequest, SkillScanResponse, EntityResult, RiskFinding
+from ..models import SkillScanOptions, SkillScanRequest, SkillScanResponse, EntityResult, RiskFinding
 from ..dependencies import get_db, get_parser, get_entity_extractor, get_community_detector
 
-router = APIRouter(prefix="/api/v1", tags=["scan"])
+router = APIRouter(tags=["scan"])
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -48,11 +48,12 @@ async def scan_skill(
         start_time = time.time()
 
         # Parse skill
-        skill = parser.parse_content(request.skill_content)
+        skill = parser.parse(request.skill_content)
 
         # Perform analysis
         entities, relationships, risk_findings, communities = perform_scan(
             skill,
+            request.skill_content,
             request.scan_options
         )
 
@@ -71,7 +72,9 @@ async def scan_skill(
                 entity_name=entity.name,
                 entity_type=entity.type.value,
                 risk_score=entity.risk_score,
-                confidence=entity.confidence
+                confidence=entity.confidence,
+                risk_level=_risk_level_from_score(entity.risk_score),
+                description=entity.description
             )
             for entity in entities
         ]
@@ -79,12 +82,25 @@ async def scan_skill(
         # Prepare relationship results
         relationship_results = []
         for rel in relationships[:100]:  # Limit to 100 for response
+            if isinstance(rel, dict):
+                source_id = rel.get('source_id', '')
+                target_id = rel.get('target_id', '')
+                relationship_type = rel.get('type', 'unknown')
+                weight = rel.get('weight', 1.0)
+                confidence = rel.get('confidence', 0.0)
+            else:
+                source_id = rel.source_id
+                target_id = rel.target_id
+                relationship_type = rel.type.value if hasattr(rel.type, 'value') else str(rel.type)
+                weight = rel.weight
+                confidence = rel.confidence
+
             relationship_results.append({
-                'source_id': rel.source_id,
-                'target_id': rel.target_id,
-                'relationship_type': rel.type.value,
-                'weight': rel.weight,
-                'confidence': rel.confidence
+                'source_id': source_id,
+                'target_id': target_id,
+                'relationship_type': relationship_type,
+                'weight': weight,
+                'confidence': confidence
             })
 
         # Prepare community results
@@ -163,12 +179,15 @@ async def get_scan_results(scan_id: str):
     )
 
 
-def perform_scan(skill, options):
+def perform_scan(skill, skill_content, options):
     """Perform actual skill scanning."""
+    if options is None:
+        options = SkillScanOptions()
+
     # Extract entities
     if options.use_graphrag:
         entities = entity_extractor.extract(
-            '',
+            skill_content,
             skill.sections,
             skill.code_blocks
         )
@@ -178,22 +197,47 @@ def perform_scan(skill, options):
     # Extract relationships
     relationships = entity_extractor.extract_relationships(
         entities,
-        skill.content
+        skill_content,
+        skill.sections
     )
 
     # Detect communities
     if options.include_community_detection:
-        communities = community_detector.detect(entities, relationships)
+        from skillgraph.graphrag.models import Relationship, RelationType
+
+        relationship_objects = []
+        for rel in relationships:
+            if isinstance(rel, dict):
+                relation_type = rel.get("type", "calls")
+                try:
+                    relation_type = RelationType(relation_type)
+                except ValueError:
+                    relation_type = RelationType.CALLS
+
+                relationship_objects.append(
+                    Relationship(
+                        source_id=rel.get("source_id", ""),
+                        target_id=rel.get("target_id", ""),
+                        type=relation_type,
+                        description=f"{rel.get('source_id', '')} -> {rel.get('target_id', '')}",
+                        weight=float(rel.get("weight", 1.0)),
+                        confidence=float(rel.get("confidence", 0.0)),
+                    )
+                )
+            else:
+                relationship_objects.append(rel)
+
+        communities = community_detector.detect(entities, relationship_objects)
     else:
         communities = []
 
     # Extract risk findings
-    risk_findings = extract_risk_findings(skill, entities, options)
+    risk_findings = extract_risk_findings(skill_content, entities, options)
 
     return entities, relationships, risk_findings, communities
 
 
-def extract_risk_findings(skill, entities, options):
+def extract_risk_findings(skill_content, entities, options):
     """Extract risk findings from skill content."""
     risk_findings = []
 
@@ -205,7 +249,7 @@ def extract_risk_findings(skill, entities, options):
         'rm -rf', 'eval', 'exec('
     ]
 
-    content = skill.content.lower()
+    content = skill_content.lower()
 
     for entity in entities:
         entity_name_lower = entity.name.lower()
@@ -261,3 +305,16 @@ def generate_recommendations(risk_findings, communities):
         recommendations.append("Multiple high-risk communities detected - analyze community interactions")
 
     return recommendations
+
+
+def _risk_level_from_score(score: float) -> str:
+    """Map risk score to risk level string."""
+    if score >= 0.8:
+        return "critical"
+    if score >= 0.6:
+        return "high"
+    if score >= 0.4:
+        return "medium"
+    if score >= 0.2:
+        return "low"
+    return "safe"

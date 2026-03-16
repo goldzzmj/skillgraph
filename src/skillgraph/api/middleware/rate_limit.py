@@ -5,7 +5,8 @@ Rate limiting middleware for FastAPI application.
 """
 
 from fastapi import Request, HTTPException, status
-from slowapi import Limiter, _rate_limit_exceeded
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from datetime import datetime, timedelta
@@ -25,8 +26,8 @@ class RateLimitConfig:
         requests_per_minute: int = 60,
         requests_per_hour: int = 1000,
         requests_per_day: int = 10000,
-        burst: int = 5
-        block_duration: int = 60
+        burst: int = 5,
+        block_duration: int = 60,
         enabled: bool = True
     ):
         self.requests_per_minute = requests_per_minute

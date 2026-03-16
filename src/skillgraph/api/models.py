@@ -4,7 +4,7 @@ Data Models for API
 Contains Pydantic models for request/response validation.
 """
 
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
@@ -153,14 +153,14 @@ class BatchScanResponse(BaseModel):
 
 class UserLogin(BaseModel):
     """User login request."""
-    email: EmailStr
+    email: str
     password: str
 
 
 class UserResponse(BaseModel):
     """User response."""
     user_id: str
-    email: EmailStr
+    email: str
     access_token: str
     refresh_token: str
     token_type: str
@@ -169,7 +169,7 @@ class UserResponse(BaseModel):
 
 class UserCreate(BaseModel):
     """User creation request."""
-    email: EmailStr
+    email: str
     password: str = Field(..., min_length=8)
     full_name: Optional[str] = None
     role: Literal["admin", "user", "analyst", "viewer"] = "user"

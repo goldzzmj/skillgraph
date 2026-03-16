@@ -61,15 +61,11 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Prometheus instrumentator
-instrumentator = Instrumentator(
-    should_group_untraced=False,
-    should_instrument_requests_inprogress=False,
-    should_exclude_untraced=True
-)
+instrumentator = Instrumentator()
 
 # Instrument app
 if ENV == "production":
-    instrumentator.instrument(app, excluded_handlers=["/docs", "/redoc", "/openapi.json"])
+    instrumentator.instrument(app)
 
 # Root endpoint
 @app.get("/")
