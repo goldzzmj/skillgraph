@@ -327,6 +327,19 @@ kubectl get pods -l app=skillgraph
 - `GET /api/v1/graph/nodes/{start_id}/path/{end_id}` - 获取执行路径
 - `POST /api/v1/graph/graph/operations/extract` - 从技能提取操作
 
+**LLM提取配置（支持 glm-5）：**
+- 通过环境变量配置，不要把 API Key 写入仓库文件
+- `OPENAI_API_KEY=<your_api_key>`
+- `OPENAI_MODEL=glm-5`
+- `OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4/`
+- `POST /api/v1/graph/graph/operations/extract` 支持可选参数：
+  - `llm_model`（默认读取 `OPENAI_MODEL`，默认值 `glm-5`）
+  - `llm_base_url`（默认读取 `OPENAI_BASE_URL`）
+
+**上传与预览API：**
+- `POST /api/v1/scan/upload` - 上传单文件/多文件/ZIP 并扫描
+- `GET /api/v1/scan/upload/preview` - 直接返回最近一次上传扫描的图谱 HTML
+
 **安全扫描API：**
 - `POST /api/v1/security/static/scan` - 静态安全扫描
 - `POST /api/v1/security/llm/scan` - LLM安全扫描

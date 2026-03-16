@@ -4,12 +4,16 @@ API Routes - Scan Endpoints
 Skill scanning and analysis endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, UploadFile, File, Form
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import HTMLResponse
 from typing import List, Dict, Any, Optional
 import uuid
 import time
 import numpy as np
+import io
+import zipfile
+import json
 
 from ..models import SkillScanOptions, SkillScanRequest, SkillScanResponse, EntityResult, RiskFinding
 from ..dependencies import get_db, get_parser, get_entity_extractor, get_community_detector
@@ -23,6 +27,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 parser = get_parser()
 entity_extractor = get_entity_extractor()
 community_detector = get_community_detector()
+UPLOAD_GRAPH_PREVIEWS: Dict[str, str] = {}
+LATEST_UPLOAD_SCAN_ID: Optional[str] = None
 
 
 @router.post("/scan", response_model=SkillScanResponse)
@@ -109,7 +115,7 @@ async def scan_skill(
             community_results.append({
                 'community_id': community.id,
                 'description': community.description,
-                'level': community.level.value if hasattr(community.level, 'value') else community.level,
+                'level': _community_level_to_value(community.level),
                 'risk_score': community.risk_score,
                 'entities': community.entities,
                 'entity_types': list(set([e.type.value for e in entities if e.id in community.entities])),
@@ -177,6 +183,167 @@ async def get_scan_results(scan_id: str):
         risk_findings=[],
         recommendations=[]
     )
+
+
+@router.post("/scan/upload")
+async def scan_skill_upload(
+    skill_file: Optional[UploadFile] = File(None, description="Single markdown file"),
+    skill_files: Optional[List[UploadFile]] = File(None, description="Multiple markdown files (folder upload)"),
+    skill_folder_zip: Optional[UploadFile] = File(None, description="ZIP file for a full folder"),
+    include_graph: bool = Form(True),
+    use_graphrag: bool = Form(True),
+    include_community_detection: bool = Form(True),
+):
+    """Scan uploaded file/folder (multipart) and optionally return graph view data."""
+    global LATEST_UPLOAD_SCAN_ID
+
+    scan_id = str(uuid.uuid4())
+    start_time = time.time()
+
+    scan_options = SkillScanOptions(
+        use_graphrag=use_graphrag,
+        include_community_detection=include_community_detection,
+    )
+
+    files_to_scan: List[Dict[str, str]] = []
+
+    if skill_file is not None:
+        content = await skill_file.read()
+        text = _decode_text_file(content)
+        if _is_markdown_file(skill_file.filename or ""):
+            files_to_scan.append({"path": skill_file.filename or "skill.md", "content": text})
+
+    if skill_files:
+        for f in skill_files:
+            content = await f.read()
+            text = _decode_text_file(content)
+            if _is_markdown_file(f.filename or ""):
+                files_to_scan.append({"path": f.filename or "skill.md", "content": text})
+
+    if skill_folder_zip is not None:
+        zip_bytes = await skill_folder_zip.read()
+        files_to_scan.extend(_extract_markdown_from_zip(zip_bytes))
+
+    if not files_to_scan:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No markdown files found. Please upload .md/.markdown/.mkd/.txt files or a ZIP containing them.",
+        )
+
+    all_entities = []
+    all_relationships = []
+    all_risk_findings = []
+    all_communities = []
+    per_file_results = []
+
+    for idx, file_item in enumerate(files_to_scan):
+        skill = parser.parse(file_item["content"])
+        entities, relationships, risk_findings, communities = perform_scan(
+            skill,
+            file_item["content"],
+            scan_options,
+        )
+
+        entity_id_map = {}
+        for e in entities:
+            old_id = e.id
+            e.id = f"f{idx}_{old_id}"
+            entity_id_map[old_id] = e.id
+
+        normalized_rels = []
+        for rel in relationships:
+            if isinstance(rel, dict):
+                source_id = entity_id_map.get(rel.get("source_id", ""), rel.get("source_id", ""))
+                target_id = entity_id_map.get(rel.get("target_id", ""), rel.get("target_id", ""))
+                normalized_rels.append(
+                    {
+                        "source_id": source_id,
+                        "target_id": target_id,
+                        "type": rel.get("type", "unknown"),
+                        "weight": rel.get("weight", 1.0),
+                        "confidence": rel.get("confidence", 0.0),
+                    }
+                )
+            else:
+                normalized_rels.append(
+                    {
+                        "source_id": entity_id_map.get(rel.source_id, rel.source_id),
+                        "target_id": entity_id_map.get(rel.target_id, rel.target_id),
+                        "type": rel.type.value if hasattr(rel.type, "value") else str(rel.type),
+                        "weight": rel.weight,
+                        "confidence": rel.confidence,
+                    }
+                )
+
+        for finding in risk_findings:
+            finding["file_path"] = file_item["path"]
+            finding["affected_entities"] = [entity_id_map.get(eid, eid) for eid in finding.get("affected_entities", [])]
+
+        all_entities.extend(entities)
+        all_relationships.extend(normalized_rels)
+        all_risk_findings.extend(risk_findings)
+        all_communities.extend(communities)
+
+        per_file_results.append(
+            {
+                "file_path": file_item["path"],
+                "entities": len(entities),
+                "relationships": len(normalized_rels),
+                "risk_findings": len(risk_findings),
+            }
+        )
+
+    processing_time = time.time() - start_time
+    risk_summary = calculate_risk_summary(all_entities, all_risk_findings)
+    recommendations = generate_recommendations(all_risk_findings, all_communities)
+
+    graph_data = _build_graph_view(files_to_scan, all_entities, all_relationships, all_risk_findings) if include_graph else {"nodes": [], "edges": []}
+
+    response = {
+        "scan_id": scan_id,
+        "scan_status": "completed",
+        "processing_time": processing_time,
+        "input_files": len(files_to_scan),
+        "per_file_results": per_file_results,
+        "risk_summary": risk_summary,
+        "entities": [
+            {
+                "entity_id": e.id,
+                "entity_name": e.name,
+                "entity_type": e.type.value,
+                "risk_score": e.risk_score,
+                "risk_level": _risk_level_from_score(e.risk_score),
+                "confidence": e.confidence,
+            }
+            for e in all_entities
+        ],
+        "relationships": all_relationships,
+        "risk_findings": all_risk_findings,
+        "recommendations": recommendations,
+        "graph": {
+            "nodes": graph_data["nodes"],
+            "edges": graph_data["edges"],
+            "html": _build_graph_html(graph_data),
+        } if include_graph else None,
+    }
+
+    if include_graph and response.get("graph") and response["graph"].get("html"):
+        UPLOAD_GRAPH_PREVIEWS[scan_id] = response["graph"]["html"]
+        LATEST_UPLOAD_SCAN_ID = scan_id
+
+    return response
+
+
+@router.get("/scan/upload/preview", response_class=HTMLResponse)
+async def scan_upload_preview(scan_id: Optional[str] = None):
+    """Return upload scan graph preview page as HTML."""
+    preview_scan_id = scan_id or LATEST_UPLOAD_SCAN_ID
+    if not preview_scan_id or preview_scan_id not in UPLOAD_GRAPH_PREVIEWS:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No upload graph preview found. Run POST /api/v1/scan/upload with include_graph=true first.",
+        )
+    return HTMLResponse(content=UPLOAD_GRAPH_PREVIEWS[preview_scan_id])
 
 
 def perform_scan(skill, skill_content, options):
@@ -318,3 +485,128 @@ def _risk_level_from_score(score: float) -> str:
     if score >= 0.2:
         return "low"
     return "safe"
+
+
+def _community_level_to_value(level: Any) -> Any:
+    try:
+        return level.value
+    except Exception:
+        return level
+
+
+def _is_markdown_file(filename: str) -> bool:
+    lower_name = filename.lower()
+    return lower_name.endswith((".md", ".markdown", ".mkd", ".txt"))
+
+
+def _decode_text_file(raw: bytes) -> str:
+    for encoding in ("utf-8", "utf-8-sig", "gbk", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except Exception:
+            continue
+    return raw.decode("utf-8", errors="ignore")
+
+
+def _extract_markdown_from_zip(zip_bytes: bytes) -> List[Dict[str, str]]:
+    files = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                name = info.filename.replace("\\", "/")
+                if ".." in name:
+                    continue
+                if not _is_markdown_file(name):
+                    continue
+                raw = archive.read(info)
+                files.append({"path": name, "content": _decode_text_file(raw)})
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid ZIP file: {exc}")
+    return files
+
+
+def _build_graph_view(files_to_scan, entities, relationships, risk_findings) -> Dict[str, Any]:
+    nodes = []
+    edges = []
+    file_node_ids = {}
+
+    for i, file_item in enumerate(files_to_scan):
+        node_id = f"file_{i}"
+        file_node_ids[file_item["path"]] = node_id
+        nodes.append(
+            {
+                "id": node_id,
+                "label": file_item["path"],
+                "group": "file",
+                "color": "#2563eb",
+            }
+        )
+
+    for entity in entities:
+        nodes.append(
+            {
+                "id": entity.id,
+                "label": entity.name,
+                "group": entity.type.value,
+                "color": _color_for_risk(_risk_level_from_score(entity.risk_score)),
+            }
+        )
+
+    for i, finding in enumerate(risk_findings):
+        finding_id = f"risk_{i}"
+        nodes.append(
+            {
+                "id": finding_id,
+                "label": finding.get("type", "risk"),
+                "group": "risk",
+                "color": _color_for_risk(finding.get("severity", "medium")),
+            }
+        )
+        for entity_id in finding.get("affected_entities", []):
+            edges.append({"from": finding_id, "to": entity_id, "label": "affects"})
+
+        file_path = finding.get("file_path")
+        if file_path in file_node_ids:
+            edges.append({"from": file_node_ids[file_path], "to": finding_id, "label": "contains"})
+
+    for rel in relationships:
+        edges.append(
+            {
+                "from": rel.get("source_id", ""),
+                "to": rel.get("target_id", ""),
+                "label": rel.get("type", "related"),
+            }
+        )
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def _color_for_risk(level: str) -> str:
+    colors = {
+        "critical": "#dc2626",
+        "high": "#ea580c",
+        "medium": "#ca8a04",
+        "low": "#16a34a",
+        "safe": "#0284c7",
+    }
+    return colors.get(level, "#6b7280")
+
+
+def _build_graph_html(graph_data: Dict[str, Any]) -> str:
+    nodes_json = json.dumps(graph_data.get("nodes", []), ensure_ascii=False)
+    edges_json = json.dumps(graph_data.get("edges", []), ensure_ascii=False)
+    return (
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>SkillGraph View</title>"
+        "<script src='https://unpkg.com/vis-network/standalone/umd/vis-network.min.js'></script>"
+        "</head><body><div id='mynetwork' style='width:100%;height:720px;border:1px solid #ddd;'></div>"
+        "<script>"
+        f"const nodes = new vis.DataSet({nodes_json});"
+        f"const edges = new vis.DataSet({edges_json});"
+        "const container=document.getElementById('mynetwork');"
+        "const data={nodes,edges};"
+        "const options={physics:{stabilization:false},interaction:{hover:true},edges:{arrows:'to'}};"
+        "new vis.Network(container,data,options);"
+        "</script></body></html>"
+    )

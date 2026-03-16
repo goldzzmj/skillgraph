@@ -165,11 +165,37 @@ Return a JSON array of structures:
 class LLMOperationExtractor:
     """LLM-based operation extractor."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4-turbo"):
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: str = "glm-5",
+        base_url: Optional[str] = None,
+    ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        self.model = model
-        self.client = openai.OpenAI(api_key=self.api_key)
-        logger.info(f"Initialized LLMOperationExtractor with model: {model}")
+        self.model = model or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "glm-5"
+        self.base_url = base_url or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_BASE_URL")
+
+        client_kwargs: Dict[str, Any] = {"api_key": self.api_key}
+        if self.base_url:
+            client_kwargs["base_url"] = self.base_url
+
+        self.client = openai.OpenAI(**client_kwargs)
+        logger.info(f"Initialized LLMOperationExtractor with model: {self.model}")
+
+    def _parse_json_from_response(self, content: str):
+        """Parse JSON content, including fenced markdown JSON."""
+        text = (content or "").strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+            if text.lower().startswith("json"):
+                text = text[4:].strip()
+
+        return json.loads(text)
 
     def extract_operations(self, skill_content: str) -> List[Dict[str, Any]]:
         """
@@ -195,7 +221,7 @@ class LLMOperationExtractor:
             )
 
             result = response.choices[0].message.content
-            operations = json.loads(result)
+            operations = self._parse_json_from_response(result)
 
             logger.info(f"Extracted {len(operations)} operations")
             return operations
@@ -233,7 +259,7 @@ class LLMOperationExtractor:
             )
 
             result = response.choices[0].message.content
-            relationships = json.loads(result)
+            relationships = self._parse_json_from_response(result)
 
             logger.info(f"Extracted {len(relationships)} relationships")
             return relationships
@@ -274,7 +300,7 @@ class LLMOperationExtractor:
             )
 
             result = response.choices[0].message.content
-            sequential_order = json.loads(result)
+            sequential_order = self._parse_json_from_response(result)
 
             logger.info(f"Extracted execution order: {len(sequential_order['execution_order'])} operations")
             return sequential_order
@@ -315,7 +341,7 @@ class LLMOperationExtractor:
             )
 
             result = response.choices[0].message.content
-            conditions = json.loads(result)
+            conditions = self._parse_json_from_response(result)
 
             logger.info(f"Extracted {len(conditions)} structures (conditions and loops)")
             return conditions

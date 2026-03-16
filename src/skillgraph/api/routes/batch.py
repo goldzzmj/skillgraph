@@ -45,10 +45,10 @@ async def batch_scan_skills(
         for skill_data in request.skills:
             # Create scan request
             scan_request = SkillScanRequest(
-                skill_content=skill_data['skill_content'],
-                skill_name=skill_data.get('skill_name'),
-                skill_type=skill_data.get('skill_type'),
-                scan_options=skill_data.get('scan_options')
+                skill_content=skill_data.skill_content,
+                skill_name=skill_data.skill_name,
+                skill_type=skill_data.skill_type,
+                scan_options=skill_data.scan_options,
             )
 
             # Submit to background task
@@ -128,7 +128,8 @@ async def get_batch_results(batch_id: str):
         failed_skills=0,
         results=[],
         summary={},
-        errors=[]
+        errors=[],
+        processing_time=0.0,
     )
 
 
@@ -136,7 +137,7 @@ def perform_scan(scan_request: SkillScanRequest) -> Dict[str, Any]:
     """Perform single skill scan."""
     try:
         # Parse skill
-        skill = parser.parse_content(scan_request.skill_content)
+        skill = parser.parse(scan_request.skill_content)
 
         # Extract entities
         entities = entity_extractor.extract(
@@ -163,6 +164,7 @@ def perform_scan(scan_request: SkillScanRequest) -> Dict[str, Any]:
             'scan_id': str(uuid.uuid4()),
             'skill_name': skill.name,
             'scan_status': 'completed',
+            'processing_time': 0.1,
             'risk_summary': risk_summary,
             'entities': [
                 {
@@ -170,12 +172,16 @@ def perform_scan(scan_request: SkillScanRequest) -> Dict[str, Any]:
                     'entity_name': entity.name,
                     'entity_type': entity.type.value,
                     'risk_score': entity.risk_score,
-                    'confidence': entity.confidence
+                    'confidence': entity.confidence,
+                    'risk_level': _risk_level_from_score(entity.risk_score),
+                    'description': entity.description,
                 }
                 for entity in entities[:100]  # Limit to 100 for response
             ],
-            'relationships': len(relationships),
-            'processing_time': 0.1
+            'relationships': [],
+            'communities': [],
+            'risk_findings': [],
+            'recommendations': [],
         }
 
         return result
@@ -213,3 +219,15 @@ def aggregate_batch_risks(batch_results: List[Dict[str, Any]]) -> Dict[str, Any]
         'low_risk_entities': low_risk_entities,
         'high_risk_ratio': high_risk_entities / total_entities if total_entities > 0 else 0.0
     }
+
+
+def _risk_level_from_score(score: float) -> str:
+    if score >= 0.8:
+        return 'critical'
+    if score >= 0.6:
+        return 'high'
+    if score >= 0.4:
+        return 'medium'
+    if score >= 0.2:
+        return 'low'
+    return 'safe'

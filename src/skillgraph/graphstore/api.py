@@ -300,6 +300,8 @@ async def delete_node(
 async def extract_operations_from_skill(
     skill_content: str,
     create_nodes: bool = True,
+    llm_model: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
     graph_store: Neo4jGraphStore = Depends(get_graph_store)
 ):
     """
@@ -328,7 +330,14 @@ async def extract_operations_from_skill(
             )
 
         # Initialize LLM extractor
-        extractor = LLMOperationExtractor(api_key=api_key)
+        model_name = llm_model or os.getenv("OPENAI_MODEL") or os.getenv("LLM_MODEL") or "glm-5"
+        base_url = llm_base_url or os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_BASE_URL")
+
+        extractor = LLMOperationExtractor(
+            api_key=api_key,
+            model=model_name,
+            base_url=base_url,
+        )
 
         # Extract operations
         operations = extractor.extract_operations(skill_content)
