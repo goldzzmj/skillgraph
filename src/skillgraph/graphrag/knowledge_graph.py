@@ -1,7 +1,7 @@
 """
 Knowledge Graph Module
 
-Build and manage knowledge graph for GraphRAG analysis.
+Build and manage the knowledge graph for GraphRAG analysis.
 """
 
 import networkx as nx
@@ -289,7 +289,7 @@ class KnowledgeGraph:
 
         # Entity type breakdown
         if entity_types:
-            parts.append(f"  - Entity types:")
+            parts.append("  - Entity types:")
             for entity_type, count in sorted(entity_types.items(), key=lambda x: x[1], reverse=True):
                 parts.append(f"    * {entity_type}: {count}")
 
@@ -332,7 +332,7 @@ class KnowledgeGraph:
         query: str
     ) -> GraphRAGAnalysis:
         """
-        Query knowledge graph.
+        Query the knowledge graph.
 
         Args:
             query: Query string
