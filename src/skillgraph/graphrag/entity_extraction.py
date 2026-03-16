@@ -25,9 +25,9 @@ class EntityExtractor:
     # Pattern-based entity patterns (fallback when LLM unavailable)
     ENTITY_PATTERNS = {
         EntityType.TOOL: [
-            r'\b(exec|execute|run|launch|invoke|call)\s+([a-zA-Z_][\w-]*)',
-            r'`(?:bash|cmd|sh)\s+([a-zA-Z_][\w-]*)`',
-            r'(?:tool|command|utility):\s*`?([a-zA-Z_][\w-]*)',
+            r'\b(exec|execute|run|launch|invoke|call)\s+([a-zA-Z_][\w./-]*)',
+            r'`(?:bash|cmd|sh|powershell)\s+([a-zA-Z_][\w./-]*)`',
+            r'(?:tool|command|utility):\s*`?([a-zA-Z_][\w./-]*)',
         ],
         EntityType.API: [
             r'\b(GET|POST|PUT|DELETE|PATCH)\s+([/][^\s)]+)',
@@ -54,6 +54,21 @@ class EntityExtractor:
             r'(?:variable|param|parameter):\s*["\']?([\w-]+)["\']?',
             r'(?:ENV|environment):\s*["\']?([\w-]+)["\']?',
         ],
+    }
+
+    NOISE_TOKENS = {
+        "run",
+        "exec",
+        "execute",
+        "call",
+        "invoke",
+        "tool",
+        "command",
+        "utility",
+        "file",
+        "path",
+        "url",
+        "endpoint",
     }
 
     def __init__(self, config: Dict[str, Any] = None):
@@ -184,14 +199,14 @@ class EntityExtractor:
                 matches = re.finditer(pattern, text, re.IGNORECASE)
 
                 for match in matches:
-                    # Extract entity name (adjust for different pattern groups)
-                    if match.groups():
-                        name = match.group(1) if len(match.groups()) > 0 else match.group(0)
-                    else:
-                        name = match.group(0)
+                    name = self._select_match_name(match)
+                    name = self._clean_entity_name(name)
 
                     # Skip empty or very short names
                     if not name or len(name) < 2:
+                        continue
+
+                    if name.lower() in self.NOISE_TOKENS:
                         continue
 
                     # Create entity
@@ -205,6 +220,7 @@ class EntityExtractor:
                             'language': language,
                             'matched_pattern': pattern
                         },
+                        risk_score=self._infer_entity_risk_score(name, entity_type),
                         confidence=0.7,  # Pattern-based extraction has lower confidence
                         source_section=section_id,
                         position=position or {}
@@ -213,6 +229,37 @@ class EntityExtractor:
                     entities.append(entity)
 
         return entities
+
+    def _select_match_name(self, match: re.Match) -> str:
+        """Select the most meaningful token from regex groups."""
+        groups = [g for g in match.groups() if isinstance(g, str) and g.strip()]
+        if not groups:
+            return match.group(0)
+
+        # Prefer longer groups (usually actual entity name instead of action verb).
+        groups.sort(key=lambda token: len(token.strip()), reverse=True)
+        return groups[0]
+
+    def _clean_entity_name(self, name: str) -> str:
+        """Normalize extracted entity names for readability and dedup."""
+        cleaned = name.strip().strip("`\"'()[]{}<>.,;:")
+        cleaned = cleaned.replace("\\\\", "/")
+        return cleaned
+
+    def _infer_entity_risk_score(self, name: str, entity_type: EntityType) -> float:
+        """Infer initial risk score from entity text and type."""
+        lowered = name.lower()
+
+        high_keywords = (".env", ".ssh", ".pem", "password", "token", "secret", "sudo", "rm -rf", "eval", "exec(")
+        medium_keywords = ("http://", "https://", "curl", "wget", "admin", "credential", "upload", "download")
+
+        if any(keyword in lowered for keyword in high_keywords):
+            return 0.85
+        if any(keyword in lowered for keyword in medium_keywords):
+            return 0.55
+        if entity_type in (EntityType.NETWORK, EntityType.PERMISSION):
+            return 0.35
+        return 0.1
 
     def _extract_with_llm(
         self,

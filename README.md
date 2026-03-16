@@ -340,6 +340,12 @@ kubectl get pods -l app=skillgraph
 - `POST /api/v1/scan/upload` - 上传单文件/多文件/ZIP 并扫描
 - `GET /api/v1/scan/upload/preview` - 直接返回最近一次上传扫描的图谱 HTML
 
+**Streamlit 前端（基于 FastAPI）：**
+- 启动 API：`uvicorn skillgraph.api.main:app --host 0.0.0.0 --port 8000`
+- 启动前端：`streamlit run src/skillgraph/viz/app.py`
+- 前端支持：拖拽/多文件上传、ZIP 文件夹上传、Markdown 文本输入
+- 图谱支持点击节点查看文件路径、段落、行号、风险建议与内容块定位
+
 **安全扫描API：**
 - `POST /api/v1/security/static/scan` - 静态安全扫描
 - `POST /api/v1/security/llm/scan` - LLM安全扫描
