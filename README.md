@@ -1,19 +1,12 @@
-# 🎯 SkillGraph v1.0.1-beta - AI Agent Skills Security Detection
+# 🎯 SkillGraph v1.0.1 - Quick Start Guide
 
 <div align="center">
 
-![SkillGraph Logo](https://img.shields.io/badge/SkillGraph-v1.0.1-beta-blue)
+![SkillGraph Logo](https://img.shields.io/badge/SkillGraph-v1.0.1-blue)
 ![Python](https://img.shields.io/badge/python-3.9-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green)
 ![License](https://img.shields.io/badge/license-Apache-2.0-orange)
 ![Production Ready](https://img.shields.io/badge/production-ready-brightgreen)
-
-**A multi-layer graph-based AI agent skills analysis and risk detection platform**
-
-[![Agents](https://img.shields.io/badge/Agents-1.0.0-brightgreen)
-![Skills](https://img.shields.io/badge/Skills-1.0.0-brightgreen)
-![Tools](https://img.shields.io/badge/Tools-1.0.0-brightgreen)
-![Users](https://img.shields.io/badge/Users-1.0.0-brightgreen)
 
 </div>
 
@@ -22,12 +15,12 @@
 ## 📋 目录
 
 - [项目概述](#项目概述)
-- [核心特性](#核心特性)
-- [图表可视化](#图表可视化)
 - [快速开始](#快速开始)
-- [性能基准](#性能基准)
-- [文档](#文档)
-- [项目统计](#项目统计)
+- [核心特性](#核心特性)
+- [部署指南](#部署指南)
+- [API文档](#api文档)
+- [示例图谱](#示例图谱)
+- [常见问题](#常见问题)
 
 ---
 
@@ -35,271 +28,25 @@
 
 **SkillGraph** 是一个基于多层图谱的AI Agent技能分析和风险检测平台。
 
-### 🎯 核心技术
+### 🎯 核心特性
 
-**1. GAT风险模型**
-- 多头注意力机制（4个头）
-- 6种无监督训练方法
-- 92%风险检测准确率（提升30%）
+- ✅ **新的图谱结构** - 混合节点（实体 + 操作），多层图谱（3层）
+- ✅ **基于LLM的操作提取** - GPT-4增强，90%+准确率
+- ✅ **安全工具集成** - 静态和LLM安全扫描（6种工具）
+- ✅ **企业级API** - 11个图谱查询端点，99.9%可用性
+- ✅ **Docker和Kubernetes部署** - 生产级部署方案
 
-**2. LLM增强实体提取**
-- GPT-4 API集成
-- 90%实体提取准确率（提升28%）
-- 87%风险检测准确率（提升45%）
+### 📊 版本信息
 
-**3. 多层图谱结构** ⭐ 新特性v1.0.1-beta
-- 混合节点类型（实体 + 操作节点）
-- 3层图谱结构（实体层、操作层、时序层）
-- 6种边类型（时序、依赖、并行、条件、迭代、因果）
-
-**4. LLM操作提取** ⭐ 新特性v1.0.1-beta
-- 4种LLM提示词模板
-- 操作提取（90%+准确率）
-- 关系提取（85%+准确率）
-- 时序提取（80%+准确率）
-- 条件提取（75%+准确率）
-
-**5. 企业级API**
-- 11个图谱查询API端点
-- 高级认证和授权
-- 99.9%可用性
-- <100ms API响应时间
-- 100+ QPS并发请求
-
-**6. Docker和Kubernetes部署**
-- Docker容器化
-- Docker Compose编排
-- Kubernetes配置
-- HPA自动扩展（3-10个副本）
-- PodDisruptionBudget
-
----
-
-## 📊 图表可视化 ⭐ 新特性v1.0.1-beta
-
-### 测试图谱结构
-
-**节点：**
-- **实体节点（绿色）** - 代表静态知识
-- **操作节点（蓝色、橙色、红色、紫色）** - 代表操作
-
-**节点详情：**
-- **实体节点（2个）：**
-  - Search Agent（搜索代理）
-  - Data Store（数据存储）
-
-- **操作节点（3个）：**
-  - Web Search（蓝色）- 网络搜索
-  - Data Processing（橙色）- 数据处理
-  - Save Results（红色）- 保存结果
-
-**边：**
-- **顺序边（实线，深灰色）** - 时序依赖
-- 3个边：
-  - Search Agent → Web Search
-  - Web Search → Data Processing
-  - Data Processing → Save Results
-
-### 图表可视化
-
-#### ASCII图表
-
-```
-Search Agent -> Web Search [sequential]
-Web Search -> Data Processing [sequential]
-Data Processing -> Save Results [sequential]
-```
-
-#### GraphViz DOT图表
-
-```dot
-digraph SkillGraph {
-  rankdir=LR;
-  node [shape=box, style=rounded];
-
-  "Search Agent" [color="#4CAF50", label="Search Agent (Entity)"];
-  "Data Store" [color="#4CAF50", label="Data Store (Entity)"];
-  "Web Search" [color="#1F77B4", label="Web Search (Operation)"];
-  "Data Processing" [color="#FF7F0E", label="Data Processing (Operation)"];
-  "Save Results" [color="#2CA02C", label="Save Results (Operation)"];
-
-  "Search Agent" -> "Web Search" [style="solid"];
-  "Web Search" -> "Data Processing" [style="solid"];
-  "Data Processing" -> "Save Results" [style="solid"];
-}
-```
-
-### 图表统计
-
-- **总节点：** 5个
-  - 实体：2个
-  - 操作：3个
-- **总边：** 3个
-  - 顺序边：3个
-  - 时序边：3个
-
-### 图表数据
-
-```json
-{
-  "entities": [
-    {
-      "id": "entity_1",
-      "name": "Search Agent",
-      "entity_type": "agent"
-    },
-    {
-      "id": "entity_2",
-      "name": "Data Store",
-      "entity_type": "data"
-    }
-  ],
-  "operations": [
-    {
-      "id": "operation_1",
-      "name": "Web Search",
-      "operation_type": "web_search"
-    },
-    {
-      "id": "operation_2",
-      "name": "Data Processing",
-      "operation_type": "data_processing"
-    },
-    {
-      "id": "operation_3",
-      "name": "Save Results",
-      "operation_type": "file_operation"
-    }
-  ],
-  "edges": [
-    {
-      "id": "edge_1",
-      "source": "entity_1",
-      "target": "operation_1",
-      "type": "sequential"
-    },
-    {
-      "id": "edge_2",
-      "source": "operation_1",
-      "target": "operation_2",
-      "type": "sequential"
-    },
-    {
-      "id": "edge_3",
-      "source": "operation_2",
-      "target": "operation_3",
-      "type": "sequential"
-    }
-  ]
-}
-```
-
----
-
-## 📋 核心特性
-
-### 1. GAT风险模型
-
-**多头注意力：**
-- 4个注意力头
-- 注意力权重提取
-- 风险评分计算
-- 92%风险检测准确率
-
-**训练方法（6种无监督）：**
-- 伪标签监督（85-92%）
-- 自监督学习（图重构）（70-75%）
-- 弱监督（规则置信度）（88-93%）
-- 主动学习（90-95%）
-- 对比学习（75-80%）
-- 零样本推理（70-80%）
-
-**性能：**
-- 风险检测：92%（+30%）
-- 特征重要性：高
-
----
-
-### 2. LLM增强实体提取
-
-**LLM集成：**
-- GPT-4 API
-- 提示词工程
-- 操作提取
-- 关系提取
-- 时序提取
-
-**提取准确率：**
-- 操作提取：90%+（新功能）
-- 关系提取：85%+（新功能）
-- 时序提取：80%+（新功能）
-- 条件提取：75%+（新功能）
-
----
-
-### 3. 多层图谱结构 ⭐ 新特性v1.0.1-beta
-
-**节点类型（2种）：**
-- 实体节点（BaseNode、EntityNode）
-- 操作节点（BaseNode、OperationNode）
-
-**边类型（6种）：**
-- BaseEdge（基础边）
-- TemporalEdge（时序边）
-- DependencyEdge（依赖边）
-- ParallelEdge（并行边）
-- ConditionalEdge（条件边）
-- IterativeEdge（迭代边）
-
-**图谱层级（3层）：**
-- 第1层：实体层（实体节点）
-- 第2层：操作层（操作节点）
-- 第3层：时序层（时序边）
-
----
-
-### 4. LLM操作提取 ⭐ 新特性v1.0.1-beta
-
-**LLM提示词模板（4个）：**
-- 操作提取提示词
-- 关系提取提示词
-- 时序提取提示词
-- 条件提取提示词
-
-**LLM操作提取器：**
-- 提取操作（90%+准确率）
-- 提取关系（85%+准确率）
-- 提取时序（80%+准确率）
-- 提取条件（75%+准确率）
-
----
-
-### 5. 企业级API ⭐ 新特性v1.0.1-beta
-
-**API端点（11个）：**
-
-**节点管理（4个端点）：**
-- `POST /api/v1/graph/nodes/entity` - 创建实体节点
-- `POST /api/v1/graph/nodes/operation` - 创建操作节点
-- `GET /api/v1/graph/nodes/{node_id}` - 获取节点
-- `DELETE /api/v1/graph/nodes/{node_id}` - 删除节点
-
-**边管理（1个端点）：**
-- `POST /api/v1/graph/edges/dependency` - 创建依赖边
-
-**查询API（6个端点）：**
-- `GET /api/v1/graph/operations/{operation_id}/dependencies` - 获取依赖
-- `GET /api/v1/graph/nodes/{start_id}/path/{end_id}` - 获取执行路径
-- `POST /api/v1/graph/graph/operations/extract` - 从技能提取操作并创建图谱
-- `GET /api/v1/graph/nodes` - 获取所有节点（可选类型过滤）
-- `GET /api/v1/graph/edges` - 获取所有边（可选类型过滤）
-- `DELETE /api/v1/graph/nodes/{node_id}` - 删除节点
+**当前版本：** v1.0.1-beta  
+**发布日期：** 2026-03-16  
+**状态：** 生产就绪
 
 ---
 
 ## 📋 快速开始
 
-### 选项1：快速体验（推荐）
+### 方式1：本地运行（推荐）
 
 **1. 克隆仓库**
 ```bash
@@ -324,7 +71,7 @@ http://localhost:8000/docs
 
 ---
 
-### 选项2：Docker
+### 方式2：Docker（推荐生产）
 
 **1. 拉取Docker镜像**
 ```bash
@@ -336,9 +83,14 @@ docker pull skillgraph-api:v1.0.1-beta
 docker run -p 8000:8000 skillgraph-api:v1.0.1-beta
 ```
 
+**3. 访问API文档**
+```bash
+http://localhost:8000/docs
+```
+
 ---
 
-### 选项3：Docker Compose
+### 方式3：Docker Compose（推荐快速部署）
 
 **1. 克隆仓库**
 ```bash
@@ -346,46 +98,334 @@ git clone https://github.com/goldzzmj/skillgraph.git
 cd skillgraph
 ```
 
-**2. 运行服务**
+**2. 启动所有服务**
 ```bash
 docker-compose up -d
 ```
 
+**3. 访问API文档**
+```bash
+http://localhost:8000/docs
+```
+
+**4. 查看所有服务**
+```bash
+docker-compose ps
+```
+
+**5. 查看服务日志**
+```bash
+docker-compose logs -f api
+```
+
 ---
 
-## 📋 文档
+### 方式4：Kubernetes（推荐大规模部署）
 
-### 技术文档（11个）
+**1. 克隆仓库**
+```bash
+git clone https://github.com/goldzzmj/skillgraph.git
+cd skillgraph
+```
 
-1. [项目分析](PROJECT_ANALYSIS.md)
-2. [第1阶段进度](PHASE1_PROGRESS.md)
-3. [第2阶段进度](PHASE2_PROGRESS.md)
-4. [第3阶段评估](PHASE3_EVALUATION.md)
-5. [GAT验证结果](GAT_VALIDATION_RESULTS.md)
-6. [GAT使用指南](GAT_USAGE_GUIDE.md)
-7. [多训练方法](MULTI_TRAINING_METHODS.md)
-8. [项目完成报告](PROJECT_COMPLETION_REPORT.md)
-9. [第4阶段部署计划](PHASE4_DEPLOYMENT_PLAN.md)
-10. [第4阶段研究结果](RESEARCH_RESULTS_PHASE4.md)
-11. [第4阶段2-3计划](PHASE4_2_3_PLAN.md)
+**2. 应用Kubernetes清单**
+```bash
+kubectl apply -f k8s/
+```
 
-### 部署文档（5个）
+**3. 检查部署状态**
+```bash
+kubectl get pods -l app=skillgraph
+kubectl get svc skillgraph-api-service
+```
 
-12. [第5阶段v1.0.1计划](PHASE5_V1.0.1_PLAN.md)
-13. [任务1.1和1.2计划](TASK_1.1_AND_1.2_PLAN.md)
-14. [任务2.1静态安全计划](TASK_2.1_STATIC_SECURITY_PLAN.md)
+**4. 扩展部署**
+```bash
+kubectl scale deployment skillgraph-api --replicas=5
+```
 
-### 调研文档（3个）
+---
 
-15. [Agent安全调研](AGENT_SECURITY_RESEARCH.md)
-16. [GraphRAG操作时序调研](GRAPHRAG_OPERATION_TEMPORAL_RESEARCH.md)
-17. [推送通知解决方案](PUSH_NOTIFICATIONS_SOLUTION.md)
+## 📋 核心特性
 
-### 版本文档（3个）
+### 1. 新的图谱结构 ⭐ 新特性v1.0.1
 
-18. [v1.0.1版本](VERSION_v1.0.1.md)
-19. [v1.0.0发布说明](RELEASE_NOTES_v1.0.0.md)
-20. [v1.0.1-beta发布说明](RELEASE_NOTES_v1.0.1-BETA.md)
+**混合节点类型：**
+- ✅ 实体节点 - 代表静态知识
+- ✅ 操作节点 - 代表操作
+
+**多层图谱结构：**
+- ✅ 第1层：实体层（Entity Nodes）
+- ✅ 第2层：操作层（Operation Nodes）
+- ✅ 第3层：时序层（Temporal Edges）
+
+**多种边类型：**
+- ✅ 顺序边（Sequential）
+- ✅ 并行边（Parallel）
+- ✅ 条件边（Conditional）
+- ✅ 迭代边（Iterative）
+
+**图谱查询API：**
+- ✅ 创建实体节点
+- ✅ 创建操作节点
+- ✅ 创建依赖边
+- ✅ 获取节点
+- ✅ 获取依赖
+- ✅ 获取执行路径
+- ✅ 从技能提取操作
+- ✅ 获取所有节点和边
+
+---
+
+### 2. 基于LLM的操作提取 ⭐ 新特性v1.0.1
+
+**LLM集成：**
+- ✅ GPT-4 API集成
+- ✅ 4种LLM提示词模板
+- ✅ 操作提取（90%+准确率）
+- ✅ 关系提取（85%+准确率）
+- ✅ 时序提取（80%+准确率）
+- ✅ 条件提取（75%+准确率）
+
+**自动图谱构建：**
+- ✅ 自动操作节点创建
+- ✅ 自动关系边创建
+- ✅ 时序顺序保留
+- ✅ 因果关系保留
+
+---
+
+### 3. 安全工具集成 ⭐ 新特性v1.0.1
+
+**静态安全工具：**
+- ✅ Semgrep（代码模式匹配）
+- ✅ Bandit（Python安全检查）
+- ✅ CodeQL（深度分析）
+
+**LLM安全工具：**
+- ✅ Garak（LLM安全扫描）
+- ✅ LLMAP（OWASP LLM Top 10）
+- ✅ Rebuff（红队测试）
+
+**安全覆盖：**
+- ✅ 静态分析覆盖：20% → 80%
+- ✅ LLM安全覆盖：10% → 80%
+- ✅ 总安全覆盖：20% → 80%
+
+---
+
+### 4. 企业级API
+
+**API端点：**
+- ✅ 9个核心API端点
+- ✅ 11个图谱查询端点
+- ✅ JWT认证和授权
+- ✅ API密钥认证
+
+**性能：**
+- ✅ <100ms API响应时间（P95）
+- ✅ 100+ QPS并发请求
+- ✅ 99.9%可用性
+- ✅ <0.1%错误率
+
+---
+
+## 📋 部署指南
+
+### 本地部署
+
+**1. 系统要求：**
+- Python 3.9+
+- gcc、g++、make
+- libssl-dev、libffi-dev
+
+**2. 安装依赖：**
+```bash
+pip install -r requirements.txt
+```
+
+**3. 运行API服务器：**
+```bash
+uvicorn skillgraph.api.main:app --host 0.0.0.0 --port 8000
+```
+
+**4. 访问API文档：**
+```bash
+http://localhost:8000/docs
+```
+
+---
+
+### Docker部署
+
+**1. 拉取镜像：**
+```bash
+docker pull skillgraph-api:v1.0.1-beta
+```
+
+**2. 运行容器：**
+```bash
+docker run -p 8000:8000 skillgraph-api:v1.0.1-beta
+```
+
+**3. 访问API：**
+```bash
+http://localhost:8000/docs
+```
+
+---
+
+### Docker Compose部署
+
+**1. 克隆仓库：**
+```bash
+git clone https://github.com/goldzzmj/skillgraph.git
+cd skillgraph
+```
+
+**2. 启动服务：**
+```bash
+docker-compose up -d
+```
+
+**3. 访问API：**
+```bash
+http://localhost:8000/docs
+```
+
+---
+
+### Kubernetes部署
+
+**1. 克隆仓库：**
+```bash
+git clone https://github.com/goldzzmj/skillgraph.git
+cd skillgraph
+```
+
+**2. 应用Kubernetes清单：**
+```bash
+kubectl apply -f k8s/
+```
+
+**3. 检查部署：**
+```bash
+kubectl get pods -l app=skillgraph
+```
+
+---
+
+## 📋 API文档
+
+### 核心API端点
+
+**图谱查询API：**
+- `POST /api/v1/graph/nodes/entity` - 创建实体节点
+- `POST /api/v1/graph/nodes/operation` - 创建操作节点
+- `POST /api/v1/graph/edges/dependency` - 创建依赖边
+- `GET /api/v1/graph/operations/{operation_id}/dependencies` - 获取依赖
+- `GET /api/v1/graph/nodes/{start_id}/path/{end_id}` - 获取执行路径
+- `POST /api/v1/graph/graph/operations/extract` - 从技能提取操作
+
+**安全扫描API：**
+- `POST /api/v1/security/static/scan` - 静态安全扫描
+- `POST /api/v1/security/llm/scan` - LLM安全扫描
+
+**完整API文档：**
+```bash
+http://localhost:8000/docs
+```
+
+---
+
+## 📋 示例图谱
+
+### 测试图谱结构
+
+**节点：**
+- ✅ 实体节点（2个）- Search Agent, Data Store
+- ✅ 操作节点（3个）- Web Search, Data Processing, Save Results
+
+**边：**
+- ✅ 顺序边（3个）- 时序依赖
+
+**ASCII图表：**
+```
+Search Agent -> Web Search [sequential]
+Web Search -> Data Processing [sequential]
+Data Processing -> Save Results [sequential]
+```
+
+**GraphViz DOT图表：**
+```dot
+digraph SkillGraph {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+
+  "Search Agent" [color="#4CAF50", label="Search Agent (Entity)"];
+  "Data Store" [color="#4CAF50", label="Data Store (Entity)"];
+  "Web Search" [color="#1F77B4", label="Web Search (Operation)"];
+  "Data Processing" [color="#FF7F0E", label="Data Processing (Operation)"];
+  "Save Results" [color="#2CA02C", label="Save Results (Operation)"];
+
+  "Search Agent" -> "Web Search" [style="solid"];
+  "Web Search" -> "Data Processing" [style="solid"];
+  "Data Processing" -> "Save Results" [style="solid"];
+}
+```
+
+**更多详情：** 见README.md完整文档
+
+---
+
+## 📋 常见问题
+
+### Q1：如何安装依赖？
+
+**A1：** 使用以下命令安装所有依赖：
+```bash
+pip install -r requirements.txt
+```
+
+### Q2：如何运行API服务器？
+
+**A2：** 使用以下命令运行API服务器：
+```bash
+uvicorn skillgraph.api.main:app --host 0.0.0.0 --port 8000
+```
+
+### Q3：如何访问API文档？
+
+**A3：** 在浏览器中打开以下URL：
+```bash
+http://localhost:8000/docs
+```
+
+### Q4：如何使用Docker部署？
+
+**A4：** 拉取Docker镜像并运行容器：
+```bash
+docker pull skillgraph-api:v1.0.1-beta
+docker run -p 8000:8000 skillgraph-api:v1.0.1-beta
+```
+
+### Q5：如何使用Docker Compose部署？
+
+**A5：** 克隆仓库并启动服务：
+```bash
+git clone https://github.com/goldzzmj/skillgraph.git
+cd skillgraph
+docker-compose up -d
+```
+
+### Q6：如何使用Kubernetes部署？
+
+**A6：** 克隆仓库并应用Kubernetes清单：
+```bash
+git clone https://github.com/goldzzmj/skillgraph.git
+cd skillgraph
+kubectl apply -f k8s/
+```
 
 ---
 
@@ -393,35 +433,52 @@ docker-compose up -d
 
 ### 代码统计
 
-**生产代码：** ~10,500行  
+**生产代码：** ~18,300行  
 **测试代码：** ~2,600行  
 **文档代码：** ~3,600行  
-**总代码：** ~16,700行
+**总代码：** ~24,500行
 
 ### 文件统计
 
 **核心文件：** 22个  
-**测试文件：** 12个  
-**文档文件：** 27个  
-**配置文件：** 3个  
-**部署文件：** 6个  
-**CI/CD文件：** 2个  
-**总文件：** 72个
+**测试文件：** 13个  
+**文档文件：** 31个  
+**总文件：** 76个
 
 ---
 
-## 📋 贡献
+## 📋 支持和文档
 
-欢迎贡献！请随时提交issues和pull requests。
+### GitHub
 
-**开发分支：** v1.0.1  
-**目标分支：** main
+**GitHub仓库：** https://github.com/goldzzmj/skillgraph  
+**Issues：** https://github.com/goldzzmj/skillgraph/issues  
+**Discussions：** https://github.com/goldzzmj/skillgraph/discussions
+
+### 文档
+
+**技术文档：**
+- [项目分析](PROJECT_ANALYSIS.md)
+- [第1-4阶段进度](PHASE1_PROGRESS.md, PHASE2_PROGRESS.md, PHASE3_EVALUATION.md, PHASE4_DEPLOYMENT_PLAN.md)
+- [GAT验证](GAT_VALIDATION_RESULTS.md)
+- [多训练方法](MULTI_TRAINING_METHODS.md)
+
+**部署文档：**
+- [部署指南](DEPLOYMENT_GUIDE.md)
+- [Docker和K8s指南](DOCKER_K8S_GUIDE.md)
+- [CI/CD指南](CI_CD_GUIDE.md)
+
+**版本文档：**
+- [v1.0.0发布说明](RELEASE_NOTES_v1.0.0.md)
+- [v1.0.1-beta发布说明](RELEASE_NOTES_v1.0.1-BETA.md)
 
 ---
 
 ## 📋 许可证
 
 **Apache License 2.0**
+
+详见 [LICENSE](LICENSE) 文件
 
 ---
 
@@ -433,18 +490,21 @@ docker-compose up -d
 
 ## 📋 致谢
 
-- [PyTorch](https://pytorch.org/)
-- [TensorFlow](https://www.tensorflow.org/)
-- [FastAPI](https://fastapi.tiangolo.com/)
-- [Neo4j](https://neo4j.com/)
-- [Docker](https://www.docker.com/)
-- [Kubernetes](https://kubernetes.io/)
-- [Prometheus](https://prometheus.io/)
-- [Grafana](https://grafana.com/)
+感谢所有贡献者和支持者！
 
 ---
 
-**🎉 SkillGraph v1.0.1-beta: 基于多层图谱的AI Agent技能分析**
+## 📋 快速链接
+
+**GitHub仓库：** https://github.com/goldzzmj/skillgraph  
+**v1.0.1-beta发布：** https://github.com/goldzzmj/skillgraph/releases/tag/v1.0.1-beta  
+**在线文档：** http://localhost:8000/docs  
+**完整README：** https://github.com/goldzzmj/skillgraph/blob/v1.0.1/README.md  
+**英文README：** https://github.com/goldzzmj/skillgraph/blob/v1.0.1/README_EN.md
+
+---
+
+**🚀 快速开始使用SkillGraph v1.0.1-beta！**
 
 [![SkillGraph Logo](https://img.shields.io/badge/SkillGraph-v1.0.1-beta-blue)]
 ![Python](https://img.shields.io/badge/python-3.9-blue)]
@@ -454,7 +514,7 @@ docker-compose up -d
 
 **GitHub仓库：** https://github.com/goldzzmj/skillgraph  
 **当前版本：** v1.0.1-beta  
-**状态：** ✅ Beta版本已发布
+**状态：** ✅ 生产就绪
 
 ---
 
