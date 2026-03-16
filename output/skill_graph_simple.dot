@@ -1,0 +1,12 @@
+digraph SkillGraph {
+  rankdir=LR;
+  node [shape=box, style=rounded];
+    "Search Agent" [color="#4CAF50", label="Search Agent (Entity)"];
+    "Data Store" [color="#4CAF50", label="Data Store (Entity)"];
+    "Web Search" [color="#1F77B4", label="Web Search (Operation)"];
+    "Data Processing" [color="#FF7F0E", label="Data Processing (Operation)"];
+    "Save Results" [color="#2CA02C", label="Save Results (Operation)"];
+    "entity_1" -> "operation_1" [style="solid"];
+    "operation_1" -> "operation_2" [style="solid"];
+    "operation_2" -> "operation_3" [style="solid"];
+}

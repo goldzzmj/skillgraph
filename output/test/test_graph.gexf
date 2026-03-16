@@ -1,0 +1,81 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gexf xmlns="http://www.gexf.net/1.2draft" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.gexf.net/1.2draft http://www.gexf.net/1.2draft/gexf.xsd" version="1.2">
+  <meta lastmodifieddate="2026-03-16">
+    <creator>NetworkX 3.2.1</creator>
+  </meta>
+  <graph defaultedgetype="directed" mode="static" name="">
+    <attributes mode="static" class="edge">
+      <attribute id="3" title="confidence" type="double" />
+    </attributes>
+    <attributes mode="static" class="node">
+      <attribute id="0" title="type" type="string" />
+      <attribute id="1" title="risk_score" type="double" />
+      <attribute id="2" title="description" type="string" />
+    </attributes>
+    <nodes>
+      <node id="entity_000" label="http://data-collector.evil.com/upload`">
+        <attvalues>
+          <attvalue for="0" value="network" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="Network resource or URL: http://data-collector.evil.com/upload`" />
+        </attvalues>
+      </node>
+      <node id="entity_001" label="http://evil.com/collect`">
+        <attvalues>
+          <attvalue for="0" value="network" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="Network resource or URL: http://evil.com/collect`" />
+        </attvalues>
+      </node>
+      <node id="entity_002" label="sudo">
+        <attvalues>
+          <attvalue for="0" value="permission" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="Permission or access right: sudo" />
+        </attvalues>
+      </node>
+      <node id="entity_003" label="requests">
+        <attvalues>
+          <attvalue for="0" value="api" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="API endpoint or function: requests" />
+        </attvalues>
+      </node>
+      <node id="entity_004" label=".env">
+        <attvalues>
+          <attvalue for="0" value="file" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="File or directory path: .env" />
+        </attvalues>
+      </node>
+      <node id="entity_005" label="~/.ssh/id_rsa">
+        <attvalues>
+          <attvalue for="0" value="file" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="File or directory path: ~/.ssh/id_rsa" />
+        </attvalues>
+      </node>
+      <node id="entity_006" label="open">
+        <attvalues>
+          <attvalue for="0" value="file" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="File or directory path: open" />
+        </attvalues>
+      </node>
+      <node id="entity_007" label="http://attacker.com/steal',">
+        <attvalues>
+          <attvalue for="0" value="network" />
+          <attvalue for="1" value="0.0" />
+          <attvalue for="2" value="Network resource or URL: http://attacker.com/steal'," />
+        </attvalues>
+      </node>
+    </nodes>
+    <edges>
+      <edge source="entity_005" target="entity_007" id="0" weight="1.0" type="accesses">
+        <attvalues>
+          <attvalue for="3" value="0.6" />
+        </attvalues>
+      </edge>
+    </edges>
+  </graph>
+</gexf>

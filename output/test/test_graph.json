@@ -1,0 +1,163 @@
+{
+  "entities": [
+    {
+      "id": "entity_000",
+      "name": "http://data-collector.evil.com/upload`",
+      "type": "network",
+      "description": "Network resource or URL: http://data-collector.evil.com/upload`",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "https?://[^\\s\\)]+"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_002",
+      "position": {}
+    },
+    {
+      "id": "entity_001",
+      "name": "http://evil.com/collect`",
+      "type": "network",
+      "description": "Network resource or URL: http://evil.com/collect`",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "https?://[^\\s\\)]+"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_002",
+      "position": {}
+    },
+    {
+      "id": "entity_002",
+      "name": "sudo",
+      "type": "permission",
+      "description": "Permission or access right: sudo",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "\\b(root|sudo|admin|administrator)\\b"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_004",
+      "position": {}
+    },
+    {
+      "id": "entity_003",
+      "name": "requests",
+      "type": "api",
+      "description": "API endpoint or function: requests",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "\\b([a-zA-Z_][\\w-]*)\\.(?:get|post|put|delete|patch)\\("
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_005",
+      "position": {}
+    },
+    {
+      "id": "entity_004",
+      "name": ".env",
+      "type": "file",
+      "description": "File or directory path: .env",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "[\"\\']([~./][\\w/\\\\.\\-]+)[\"\\']"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_005",
+      "position": {}
+    },
+    {
+      "id": "entity_005",
+      "name": "~/.ssh/id_rsa",
+      "type": "file",
+      "description": "File or directory path: ~/.ssh/id_rsa",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "[\"\\']([~./][\\w/\\\\.\\-]+)[\"\\']"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_005",
+      "position": {}
+    },
+    {
+      "id": "entity_006",
+      "name": "open",
+      "type": "file",
+      "description": "File or directory path: open",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "\\b(read|write|open|load|save)\\s*\\(\\s*[\"\\']([^\"\\']+)[\"\\']"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_005",
+      "position": {}
+    },
+    {
+      "id": "entity_007",
+      "name": "http://attacker.com/steal',",
+      "type": "network",
+      "description": "Network resource or URL: http://attacker.com/steal',",
+      "properties": {
+        "is_code": false,
+        "language": "unknown",
+        "matched_pattern": "https?://[^\\s\\)]+"
+      },
+      "risk_score": 0.0,
+      "confidence": 0.7,
+      "source_section": "sec_005",
+      "position": {}
+    }
+  ],
+  "relationships": [
+    {
+      "source_id": "entity_005",
+      "target_id": "entity_007",
+      "type": "accesses",
+      "description": "reads or accesses",
+      "properties": {},
+      "weight": 1.0,
+      "confidence": 0.6,
+      "source_section": ""
+    }
+  ],
+  "communities": [
+    {
+      "id": "community_level0_000",
+      "level": 0,
+      "entities": [
+        "entity_005",
+        "entity_007"
+      ],
+      "description": "File system operations (2 entities)",
+      "risk_score": 0.0,
+      "properties": {
+        "size": 2,
+        "entity_types": [
+          "network",
+          "file"
+        ]
+      }
+    }
+  ],
+  "risk_findings": [],
+  "summary": "Knowledge Graph Summary:\n  - Total entities: 8\n  - Total relationships: 1\n  - Total communities: 1\n  - Entity types:\n    * network: 3\n    * file: 3\n    * permission: 1\n    * api: 1\n  - Average community size: 2.0 entities",
+  "stats": {
+    "entity_count": 8,
+    "relationship_count": 1,
+    "community_count": 1,
+    "high_risk_count": 0
+  }
+}

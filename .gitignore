@@ -1,91 +1,65 @@
-# Byte-compiled / optimized / DLL files
+# .gitignore for SkillGraph
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
+dist/
+build/
 *.egg
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Translations
-*.mo
-*.pot
-
-# Environments
-.env
-.venv
-env/
+# Virtual environments
 venv/
+env/
 ENV/
-env.bak/
-venv.bak/
+.venv/
 
 # IDE
-.idea/
 .vscode/
+.idea/
 *.swp
 *.swo
 *~
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Ruff
-.ruff_cache/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Project specific
-*.log
-output/
-reports/
-temp/
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Documentation (Process documents - Hidden from repo)
+PHASE*.md
+TASK*.md
+MULTI_TRAINING_METHODS.md
+GAT_*.md
+AGENT_SECURITY_RESEARCH.md
+GRAPHRAG_OPERATION_TEMPORAL_RESEARCH.md
+PUSH_NOTIFICATIONS_SOLUTION.md
+REPOSITORY_CLEANUP_SUMMARY.md
+VERSION*.md
+RELEASE_NOTES*.md
+
+# Keep only user-facing docs:
+# - README.md
+# - README_EN.md
+# - LICENSE
+# - CONTRIBUTING.md
+# - DEPLOYMENT_GUIDE.md
+# - DOCKER_K8S_GUIDE.md
+# - CI_CD_GUIDE.md
+# - AGENTS.md
+# - TOOLS.md
+# - USER.md
+# - SKILL.md
