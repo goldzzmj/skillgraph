@@ -15,18 +15,20 @@ streamlit run src/skillgraph/viz/app.py
 
 ## What You Can Do
 
-- Upload markdown files, ZIP folders, or paste markdown text
+- Upload markdown files, ZIP folders, paste markdown text, or analyze from skill URL
 - Build an interpretable graph with typed nodes:
   - `file`, `section`, `entity`, `risk`
 - Inspect node details (file path, section, line range, content block)
 - View risk findings and remediation suggestions
 - Export a remediation markdown report when risk is `medium/high/critical`
+  - includes suggested before/after rewrite templates
 - Open graph preview endpoint directly:
   - `GET /api/v1/scan/upload/preview?scan_id=<scan_id>`
 
 ## Core Endpoints
 
 - `POST /api/v1/scan/upload`
+- `POST /api/v1/scan/url`
 - `GET /api/v1/scan/upload/preview`
 - `POST /api/v1/scan`
 - `POST /api/v1/predict`
@@ -56,3 +58,8 @@ set OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
 ```bash
 pytest tests/test_viz_zip_upload.py tests/test_simple.py -q
 ```
+
+## Notes on Documentation
+
+- Public docs: `README.md`, `README_EN.md`, `README_ZH.md`
+- Internal process and phase markdown docs are under `docs/process/`

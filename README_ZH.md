@@ -15,17 +15,19 @@ streamlit run src/skillgraph/viz/app.py
 
 ## 主要能力
 
-- 支持输入：多文件上传、ZIP 文件夹上传、粘贴 Markdown
+- 支持输入：多文件上传、ZIP 文件夹上传、粘贴 Markdown、Skills URL 解析
 - 关系图谱：按 `file / section / entity / risk` 节点类型展示
 - 节点定位：点击节点查看文件路径、段落、行号和上下文内容块
 - 风险分析：展示风险等级、发现详情与修复建议
 - 整改导出：当风险为 `medium/high/critical` 时，可导出整改 Markdown 文档
+  - 包含 before/after 改写模板，便于后续交给 AI 进行 skill 优化
 - 图谱预览：可直接打开预览接口
   - `GET /api/v1/scan/upload/preview?scan_id=<scan_id>`
 
 ## 常用接口
 
 - `POST /api/v1/scan/upload`
+- `POST /api/v1/scan/url`
 - `GET /api/v1/scan/upload/preview`
 - `POST /api/v1/scan`
 - `POST /api/v1/predict`
@@ -55,3 +57,8 @@ export OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4/
 ```bash
 pytest tests/test_viz_zip_upload.py tests/test_simple.py -q
 ```
+
+## 文档说明
+
+- 对外文档：`README.md`、`README_EN.md`、`README_ZH.md`
+- 过程/阶段/研究类 Markdown 文档已整理到 `docs/process/`

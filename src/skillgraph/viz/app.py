@@ -61,7 +61,7 @@ def create_app() -> None:
         st.markdown("## Input")
         input_mode = st.radio(
             "Upload mode",
-            ["Drag or upload files", "Upload folder zip", "Paste markdown"],
+            ["Drag or upload files", "Upload folder zip", "Paste markdown", "Analyze from URL"],
             horizontal=True,
         )
 
@@ -70,6 +70,7 @@ def create_app() -> None:
         markdown_filename = "pasted_skill.md"
         uploaded_files: List[Any] = []
         uploaded_zip = None
+        skill_url = ""
 
         if input_mode == "Drag or upload files":
             uploaded_files = st.file_uploader(
@@ -89,13 +90,21 @@ def create_app() -> None:
             run_analysis = st.button("Analyze ZIP folder", type="primary", use_container_width=True)
 
         else:
-            markdown_filename = st.text_input("Virtual file name", value="pasted_skill.md")
-            markdown_input = st.text_area(
-                "Paste markdown content",
-                height=360,
-                placeholder="# Skill\nDescribe skill behavior here...",
-            )
-            run_analysis = st.button("Analyze markdown text", type="primary", use_container_width=True)
+            if input_mode == "Paste markdown":
+                markdown_filename = st.text_input("Virtual file name", value="pasted_skill.md")
+                markdown_input = st.text_area(
+                    "Paste markdown content",
+                    height=360,
+                    placeholder="# Skill\nDescribe skill behavior here...",
+                )
+                run_analysis = st.button("Analyze markdown text", type="primary", use_container_width=True)
+            else:
+                skill_url = st.text_input(
+                    "Skill URL",
+                    placeholder="https://raw.githubusercontent.com/.../SKILL.md or GitHub tree URL",
+                )
+                st.caption("Supports markdown URL, zip URL, GitHub blob URL, and GitHub tree URL.")
+                run_analysis = st.button("Analyze from URL", type="primary", use_container_width=True)
 
         if run_analysis:
             with st.spinner("Analyzing with FastAPI..."):
@@ -107,6 +116,7 @@ def create_app() -> None:
                         uploaded_zip=uploaded_zip,
                         markdown_input=markdown_input,
                         markdown_filename=markdown_filename,
+                        skill_url=skill_url,
                         include_graph=include_graph,
                         use_graphrag=use_graphrag,
                         include_community_detection=include_community_detection,
@@ -156,7 +166,9 @@ def create_app() -> None:
 
                 preview_path = latest_result.get("graph_preview_url")
                 if preview_path:
-                    preview_url = f"{api_base.rstrip('/')}{preview_path}"
+                    preview_url = preview_path
+                    if preview_url.startswith("/"):
+                        preview_url = f"{api_base.rstrip('/')}{preview_url}"
                     st.link_button("Open graph preview endpoint", preview_url, use_container_width=True)
             else:
                 st.warning("No graph generated. Enable graph in sidebar and rerun analysis.")
@@ -357,6 +369,14 @@ def _build_remediation_markdown(result: Dict[str, Any]) -> str:
             lines.append(f"   - Location: {loc_text}")
             lines.append(f"   - Why risky: {finding.get('description','')}")
             lines.append(f"   - Suggested rewrite: {finding.get('suggestion','Refactor to least-privilege and explicit approvals.')}")
+            lines.append("   - Before (example):")
+            lines.append("```markdown")
+            lines.append(_markdown_code_guard(finding.get("content_snippet") or "<replace this risky line>"))
+            lines.append("```")
+            lines.append("   - After (template):")
+            lines.append("```markdown")
+            lines.append(_build_after_template(finding))
+            lines.append("```")
             if block_text:
                 lines.append("   - Context block:")
                 lines.append("```markdown")
@@ -400,6 +420,26 @@ def _group_findings_by_file(findings: List[Dict[str, Any]]) -> Dict[str, List[Di
     return grouped
 
 
+def _build_after_template(finding: Dict[str, Any]) -> str:
+    """Build safer rewrite template for remediation markdown."""
+    risk_type = str(finding.get("type", "risk")).replace("_", " ")
+    suggestion = finding.get("suggestion", "Apply least-privilege and explicit approval checks.")
+    return (
+        f"# Safer rewrite for: {risk_type}\n"
+        "# 1) Keep original task intent\n"
+        "# 2) Restrict sensitive files/endpoints with allowlist\n"
+        "# 3) Add explicit user confirmation before risky actions\n"
+        f"# 4) {suggestion}\n"
+        "\n"
+        "<safe rewritten content here>"
+    )
+
+
+def _markdown_code_guard(text: str) -> str:
+    """Prevent accidental code fence break in generated markdown."""
+    return str(text).replace("```", "` ` `")
+
+
 def _run_analysis(
     api_base: str,
     input_mode: str,
@@ -407,6 +447,7 @@ def _run_analysis(
     uploaded_zip: Any,
     markdown_input: str,
     markdown_filename: str,
+    skill_url: str,
     include_graph: bool,
     use_graphrag: bool,
     include_community_detection: bool,
@@ -442,6 +483,21 @@ def _run_analysis(
                 (file_name, markdown_input.encode("utf-8"), "text/markdown"),
             )
         )
+    elif input_mode == "Analyze from URL":
+        if not skill_url.strip():
+            raise ValueError("Please provide a skill URL")
+        response = session.post(
+            f"{base}/api/v1/scan/url",
+            data={
+                "skill_url": skill_url.strip(),
+                "include_graph": str(include_graph).lower(),
+                "use_graphrag": str(use_graphrag).lower(),
+                "include_community_detection": str(include_community_detection).lower(),
+            },
+            timeout=300,
+        )
+        _raise_for_status(response)
+        return response.json()
     else:
         if not uploaded_files:
             raise ValueError("Please upload at least one markdown file")

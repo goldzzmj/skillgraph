@@ -18,11 +18,22 @@ streamlit run src/skillgraph/viz/app.py
 
 ## Key Capabilities
 
-- Upload skill files, ZIP folders, or pasted markdown
+- Upload skill files, ZIP folders, pasted markdown, or skill URLs
 - Build interpretable relationship graph (file/section/entity/risk)
 - Click nodes to locate risky content blocks and suggestions
-- Export remediation markdown for medium/high risk skills
+- Export remediation markdown for medium/high risk skills (includes before/after rewrite templates)
 - Open graph preview endpoint directly from scan results
+
+## Useful Endpoints
+
+- `POST /api/v1/scan/upload`
+- `POST /api/v1/scan/url`
+- `GET /api/v1/scan/upload/preview?scan_id=<scan_id>`
+
+## Repository Structure
+
+- User-facing docs are kept in `README.md`, `README_EN.md`, and `README_ZH.md`.
+- Process/progress/research markdown files are organized under `docs/process/`.
 
 ## Security Note
 

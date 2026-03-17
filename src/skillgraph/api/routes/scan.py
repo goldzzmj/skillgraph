@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, 
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import HTMLResponse
 from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
 import uuid
 import time
 import numpy as np
@@ -16,6 +17,9 @@ import zipfile
 import json
 import re
 from collections import Counter
+from urllib.parse import urlparse
+
+import requests
 
 from ..models import SkillScanOptions, SkillScanRequest, SkillScanResponse, EntityResult, RiskFinding
 from ..dependencies import get_db, get_parser, get_entity_extractor, get_community_detector
@@ -234,6 +238,48 @@ async def scan_skill_upload(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No markdown files found. Please upload .md/.markdown/.mkd/.txt files or a ZIP containing them.",
         )
+
+    response = _analyze_files_to_response(files_to_scan, scan_options, include_graph)
+    response["input_source"] = "upload"
+    return response
+
+
+@router.post("/scan/url")
+async def scan_skill_url(
+    skill_url: str = Form(..., description="Skill markdown URL or GitHub tree URL"),
+    include_graph: bool = Form(True),
+    use_graphrag: bool = Form(True),
+    include_community_detection: bool = Form(True),
+):
+    """Scan skill content from URL and return graph/risk analysis."""
+    scan_options = SkillScanOptions(
+        use_graphrag=use_graphrag,
+        include_community_detection=include_community_detection,
+    )
+
+    files_to_scan = _extract_skill_files_from_url(skill_url)
+    if not files_to_scan:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No markdown files found from the provided URL.",
+        )
+
+    response = _analyze_files_to_response(files_to_scan, scan_options, include_graph)
+    response["input_source"] = "url"
+    response["skill_url"] = skill_url
+    return response
+
+
+def _analyze_files_to_response(
+    files_to_scan: List[Dict[str, str]],
+    scan_options: SkillScanOptions,
+    include_graph: bool,
+) -> Dict[str, Any]:
+    """Analyze parsed skill files and return response payload."""
+    global LATEST_UPLOAD_SCAN_ID
+
+    scan_id = str(uuid.uuid4())
+    start_time = time.time()
 
     all_entities: List[Any] = []
     all_relationships: List[Dict[str, Any]] = []
@@ -731,6 +777,129 @@ def _extract_markdown_from_zip(zip_bytes: bytes) -> List[Dict[str, str]]:
     except zipfile.BadZipFile as exc:
         raise HTTPException(status_code=400, detail=f"Invalid ZIP file: {exc}")
     return files
+
+
+def _extract_skill_files_from_url(skill_url: str) -> List[Dict[str, str]]:
+    """Extract markdown files from skill URL input."""
+    parsed = urlparse(skill_url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http/https URLs are supported")
+
+    if "github.com" in parsed.netloc.lower() and "/tree/" in parsed.path:
+        files = _extract_markdown_from_github_tree_url(skill_url)
+        if files:
+            return files
+
+    target_url = _normalize_github_blob_url(skill_url)
+
+    try:
+        response = requests.get(target_url, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch URL: {exc}")
+
+    content_type = (response.headers.get("content-type") or "").lower()
+    if target_url.lower().endswith(".zip") or "application/zip" in content_type:
+        return _extract_markdown_from_zip(response.content)
+
+    text = response.text
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="URL content is empty")
+
+    file_name = Path(parsed.path).name or Path(urlparse(target_url).path).name or "skill.md"
+    if not _is_markdown_file(file_name) and not _looks_like_markdown(text):
+        raise HTTPException(
+            status_code=400,
+            detail="URL content is not recognized as markdown. Provide a markdown URL, zip URL, or GitHub tree URL.",
+        )
+
+    return [{"path": file_name if _is_markdown_file(file_name) else "skill.md", "content": text}]
+
+
+def _normalize_github_blob_url(skill_url: str) -> str:
+    """Convert GitHub blob URL to raw URL when possible."""
+    parsed = urlparse(skill_url)
+    if "github.com" not in parsed.netloc.lower():
+        return skill_url
+
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) >= 5 and parts[2] == "blob":
+        owner, repo, _, branch = parts[:4]
+        file_path = "/".join(parts[4:])
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{file_path}"
+
+    return skill_url
+
+
+def _extract_markdown_from_github_tree_url(skill_url: str) -> List[Dict[str, str]]:
+    """Extract markdown files from GitHub tree URL recursively."""
+    parsed = urlparse(skill_url)
+    parts = [part for part in parsed.path.split("/") if part]
+    # owner/repo/tree/branch/path...
+    if len(parts) < 4 or parts[2] != "tree":
+        return []
+
+    owner = parts[0]
+    repo = parts[1]
+    branch = parts[3]
+    folder_path = "/".join(parts[4:])
+
+    session = requests.Session()
+    session.headers.update({"Accept": "application/vnd.github+json", "User-Agent": "SkillGraph"})
+
+    collected: List[Dict[str, str]] = []
+
+    def walk(path: str) -> None:
+        if len(collected) >= 120:
+            return
+
+        api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{path}" if path else f"https://api.github.com/repos/{owner}/{repo}/contents"
+        params = {"ref": branch}
+        try:
+            response = session.get(api_url, params=params, timeout=60)
+            response.raise_for_status()
+        except requests.RequestException:
+            return
+
+        data = response.json()
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            item_type = item.get("type")
+            item_path = item.get("path", "")
+
+            if item_type == "dir":
+                walk(item_path)
+                continue
+
+            if item_type != "file":
+                continue
+
+            if not _is_markdown_file(item_path):
+                continue
+
+            download_url = item.get("download_url")
+            if not download_url:
+                continue
+
+            try:
+                file_response = session.get(download_url, timeout=60)
+                file_response.raise_for_status()
+            except requests.RequestException:
+                continue
+
+            collected.append({"path": item_path, "content": file_response.text})
+            if len(collected) >= 120:
+                return
+
+    walk(folder_path)
+    return collected
+
+
+def _looks_like_markdown(text: str) -> bool:
+    """Heuristic markdown detection for URL content."""
+    sample = text[:4000]
+    markdown_signals = ["# ", "## ", "```", "- ", "1. ", "---\n"]
+    return any(signal in sample for signal in markdown_signals)
 
 
 def _build_section_blocks(content: str, sections: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
