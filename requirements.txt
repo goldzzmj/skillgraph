@@ -1,0 +1,19 @@
+# Windows 自动化工具集 - Python 依赖包
+
+# 核心自动化库
+pyautogui>=0.9.54
+pygetwindow>=0.0.9
+pyperclip>=1.8.0
+pywinauto>=0.6.8
+pillow>=9.0.0
+
+# 可选依赖（用于增强功能）
+# xiaohongshu-py>=0.1.0  # 小红书相关功能
+# uiautomation>=2.0.0     # 高级窗口控制
+# colorlog>=6.0.0         # 日志增强
+
+# 开发依赖（开发时使用）
+# pytest>=7.0.0           # 测试框架
+# black>=22.0.0           # 代码格式化
+# flake8>=4.0.0           # 代码检查
+# mypy>=0.950             # 类型检查

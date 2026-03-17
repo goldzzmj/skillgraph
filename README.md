@@ -48,6 +48,39 @@
 
 ## 🎯 快速开始
 
+### ⚡ 一键启动（推荐）
+
+我们提供了便捷的一键启动脚本，让您无需手动安装和配置。
+
+#### Windows 用户
+
+```bash
+# 下载项目后，直接双击运行
+quick_start.bat
+```
+
+脚本会自动完成：
+- ✅ 检查 Python 环境
+- ✅ 创建虚拟环境
+- ✅ 安装所有依赖
+- ✅ 提供交互式功能菜单
+
+#### Linux/Mac 用户
+
+```bash
+# 1. 给脚本添加执行权限
+chmod +x quick_start.sh
+
+# 2. 运行脚本
+./quick_start.sh
+```
+
+脚本功能与 Windows 版本相同，自动处理环境配置。
+
+**注意**：Windows 版本中的微信自动化功能仅适用于 Windows 系统。Linux/Mac 用户可以使用其他功能如磁盘清理、桌面控制等。
+
+---
+
 ### 30 秒快速体验
 
 ```bash
@@ -292,6 +325,10 @@ screenshot = pyautogui.screenshot(region=(
 
 ```
 workspace/
+├── ⚡ quick_start.bat            # Windows 一键启动脚本
+├── ⚡ quick_start.sh             # Linux/Mac 一键启动脚本
+├── 📦 requirements.txt           # Python 依赖清单
+│
 ├── 📂 core/                      # 核心功能模块
 │   ├── clean_simple.py          # 磁盘清理核心
 │   ├── wechat_automation.py    # 微信自动化
@@ -548,6 +585,49 @@ pip install pyautogui
 ```bash
 pip install --upgrade numpy
 ```
+
+### 6. 一键启动脚本无法运行
+
+**问题**: Windows 双击 `quick_start.bat` 后闪退或报错
+
+**解决**:
+- 右键点击脚本，选择"以管理员身份运行"
+- 检查是否安装了 Python 3.7 或更高版本
+- 手动打开命令提示符，运行脚本查看详细错误信息
+
+### 7. Linux/Mac 脚本权限错误
+
+**问题**: 运行 `./quick_start.sh` 时提示 "Permission denied"
+
+**解决**:
+```bash
+chmod +x quick_start.sh
+./quick_start.sh
+```
+
+### 8. 一键启动脚本安装依赖失败
+
+**问题**: 脚本运行时依赖安装失败
+
+**解决**:
+- 检查网络连接
+- 使用国内镜像源加速下载：
+  ```bash
+  pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+  ```
+- 或手动安装依赖：`pip install -r requirements.txt`
+
+### 9. Linux/Mac 上微信自动化不可用
+
+**问题**: 在 Linux/Mac 上使用微信自动化功能报错
+
+**说明**: 微信自动化功能目前仅支持 Windows 系统
+
+**解决**: Linux/Mac 用户可以使用以下功能：
+- 磁盘清理
+- 桌面控制（鼠标、键盘）
+- 截图工具
+- 其他自动化工具
 
 ---
 
